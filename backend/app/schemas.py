@@ -125,3 +125,43 @@ class RiskOut(BaseModel):
     @property
     def level(self) -> str:
         return risk_level(self.score)
+
+# ---------- Traitement des risques ----------
+from datetime import date
+
+TreatmentStrategy = Literal["réduire", "accepter", "transférer", "éviter"]
+TreatmentStatus = Literal["à faire", "en cours", "terminé"]
+
+
+class TreatmentCreate(BaseModel):
+    strategy: TreatmentStrategy
+    action: str = Field(min_length=5, max_length=5000)
+    owner: str | None = Field(default=None, max_length=80)
+    due_date: date | None = None
+    status: TreatmentStatus = "à faire"
+    residual_probability: Scale5 | None = None
+    residual_impact: Scale5 | None = None
+
+
+class TreatmentUpdate(BaseModel):
+    strategy: TreatmentStrategy | None = None
+    action: str | None = Field(default=None, min_length=5, max_length=5000)
+    owner: str | None = Field(default=None, max_length=80)
+    due_date: date | None = None
+    status: TreatmentStatus | None = None
+    residual_probability: Scale5 | None = None
+    residual_impact: Scale5 | None = None
+
+
+class TreatmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    risk_id: int
+    strategy: str
+    action: str
+    owner: str | None
+    due_date: date | None
+    status: str
+    residual_probability: int | None
+    residual_impact: int | None
