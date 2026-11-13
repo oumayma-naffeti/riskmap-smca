@@ -781,12 +781,26 @@ async function renderMatrix() {
     <p class="matrix-caption">Probabilité (verticale) × Impact (horizontal)</p>`;
 }
 
+
+function riskLevelLabel(score) {
+    if (score <= 4) return "Faible";
+    if (score <= 9) return "Moyen";
+    if (score <= 15) return "Élevé";
+    return "Critique";
+}
+
 async function renderTreatments() {
+    const canWrite = ["admin", "analyste"].includes(currentUser?.role);
+    const canDelete = currentUser?.role === "admin";
+
     const results = await Promise.all(
         appData.risks.map(async risk => {
             try {
                 const treatments = await API.treatments(risk.id);
-                return treatments.map(t => ({ ...t, threat: risk.threat }));
+                return treatments.map(t => ({
+                    ...t,
+                    threat: risk.threat
+                }));
             } catch (error) {
                 console.error("Traitement du risque", risk.id, error);
                 return [];
@@ -796,21 +810,349 @@ async function renderTreatments() {
 
     appData.treatments = results.flat();
 
+    const strategies = [
+        ["réduire", "Réduire"],
+        ["accepter", "Accepter"],
+        ["transférer", "Transférer"],
+        ["éviter", "Éviter"]
+    ];
+
+    const statuses = [
+        ["à faire", "À faire"],
+        ["en cours", "En cours"],
+        ["terminé", "Terminé"]
+    ];
+
     $("treatments-content").innerHTML = `
-    <table>
-      <thead><tr>
-        <th>Risque</th><th>Stratégie</th><th>Action</th>
-        <th>Responsable</th><th>Échéance</th><th>Statut</th>
-      </tr></thead>
-      <tbody>${appData.treatments.map(t => `<tr>
-        <td>${escapeHTML(t.threat)}</td>
-        <td>${escapeHTML(t.strategy)}</td>
-        <td>${escapeHTML(t.action)}</td>
-        <td>${escapeHTML(t.owner || "—")}</td>
-        <td>${escapeHTML(t.due_date || "—")}</td>
-        <td>${escapeHTML(t.status)}</td>
-      </tr>`).join("") || `<tr><td colspan="6">Aucun traitement enregistré</td></tr>`}</tbody>
-    </table>`;
+    ${canWrite ? `
+    <div class="process-form-card">
+        <h3 id="treatment-form-title">Ajouter un traitement</h3>
+
+        <form id="treatment-form">
+            <input type="hidden" id="treatment-id">
+
+            <div class="process-form-grid">
+
+                <div class="form-field full-width">
+                    <label for="treatment-risk">Risque concerné *</label>
+                    <select id="treatment-risk" required>
+                        <option value="">Sélectionner un risque</option>
+                        ${appData.risks.map(r => `
+                            <option value="${r.id}">
+                                ${escapeHTML(r.threat)} (${r.score}/25 - ${escapeHTML(r.level)})
+                            </option>
+                        `).join("")}
+                    </select>
+                </div>
+
+                <div class="form-field">
+                    <label for="treatment-strategy">Stratégie *</label>
+                    <select id="treatment-strategy" required>
+                        ${strategies.map(([value, label]) => `
+                            <option value="${value}">${label}</option>
+                        `).join("")}
+                    </select>
+                </div>
+
+                <div class="form-field">
+                    <label for="treatment-status">Statut *</label>
+                    <select id="treatment-status" required>
+                        ${statuses.map(([value, label]) => `
+                            <option value="${value}">${label}</option>
+                        `).join("")}
+                    </select>
+                </div>
+
+                <div class="form-field full-width">
+                    <label for="treatment-action">Action corrective *</label>
+                    <textarea id="treatment-action" minlength="5"
+                              maxlength="5000" required rows="3"
+                              placeholder="Décrire les actions à mettre en place..."></textarea>
+                </div>
+
+                <div class="form-field">
+                    <label for="treatment-owner">Responsable</label>
+                    <input id="treatment-owner" type="text"
+                           maxlength="80"
+                           placeholder="Ex : Responsable informatique">
+                </div>
+
+                <div class="form-field">
+                    <label for="treatment-date">Date limite</label>
+                    <input id="treatment-date" type="date">
+                </div>
+
+                <div class="form-field">
+                    <label for="residual-probability">Probabilité résiduelle</label>
+                    <select id="residual-probability">
+                        <option value="">Non évaluée</option>
+                        <option value="1">1 - Très faible</option>
+                        <option value="2">2 - Faible</option>
+                        <option value="3">3 - Moyenne</option>
+                        <option value="4">4 - Élevée</option>
+                        <option value="5">5 - Très élevée</option>
+                    </select>
+                </div>
+
+                <div class="form-field">
+                    <label for="residual-impact">Impact résiduel</label>
+                    <select id="residual-impact">
+                        <option value="">Non évalué</option>
+                        <option value="1">1 - Très faible</option>
+                        <option value="2">2 - Faible</option>
+                        <option value="3">3 - Moyen</option>
+                        <option value="4">4 - Élevé</option>
+                        <option value="5">5 - Très élevé</option>
+                    </select>
+                </div>
+
+                <div class="full-width" id="residual-preview">
+                    Score résiduel : non évalué
+                </div>
+            </div>
+
+            <div class="process-form-actions">
+                <button type="submit" class="primary-button"
+                        id="treatment-submit">
+                    Enregistrer le traitement
+                </button>
+                <button type="button" class="secondary-button"
+                        id="treatment-cancel">
+                    Annuler
+                </button>
+            </div>
+        </form>
+    </div>
+    ` : ""}
+
+    <div class="process-form-card">
+        <h3>Registre des traitements</h3>
+
+        <table>
+          <thead>
+            <tr>
+                <th>Risque</th>
+                <th>Stratégie</th>
+                <th>Action corrective</th>
+                <th>Responsable</th>
+                <th>Échéance</th>
+                <th>Statut</th>
+                <th>Risque résiduel</th>
+                ${canWrite ? "<th>Actions</th>" : ""}
+            </tr>
+          </thead>
+
+          <tbody>
+          ${appData.treatments.map(t => {
+              const residualScore =
+                  t.residual_probability != null &&
+                  t.residual_impact != null
+                  ? t.residual_probability * t.residual_impact
+                  : null;
+
+              return `
+              <tr>
+                  <td>${escapeHTML(t.threat)}</td>
+                  <td>${escapeHTML(t.strategy)}</td>
+                  <td>${escapeHTML(t.action)}</td>
+                  <td>${escapeHTML(t.owner || "—")}</td>
+                  <td>${escapeHTML(t.due_date || "—")}</td>
+                  <td>${escapeHTML(t.status)}</td>
+                  <td>${residualScore !== null
+                      ? `${residualScore}/25 — ${riskLevelLabel(residualScore)}`
+                      : "Non évalué"}</td>
+                  ${canWrite ? `
+                  <td class="process-actions">
+                      <button class="action-button"
+                              data-edit-treatment="${t.id}">
+                          Modifier
+                      </button>
+                      ${canDelete ? `
+                      <button class="action-button danger-button"
+                              data-delete-treatment="${t.id}">
+                          Supprimer
+                      </button>` : ""}
+                  </td>` : ""}
+              </tr>`;
+          }).join("") || `
+              <tr>
+                  <td colspan="${canWrite ? 8 : 7}">
+                      Aucun traitement enregistré
+                  </td>
+              </tr>
+          `}
+          </tbody>
+        </table>
+    </div>`;
+
+    if (!canWrite) return;
+
+    const form = $("treatment-form");
+
+    const residualProbability = $("residual-probability");
+    const residualImpact = $("residual-impact");
+
+    function riskLevelLabel(score) {
+        if (score <= 4) return "Faible";
+        if (score <= 9) return "Moyen";
+        if (score <= 15) return "Élevé";
+        return "Critique";
+    }
+
+    function updateResidualPreview() {
+        const p = residualProbability.value;
+        const i = residualImpact.value;
+
+        if (!p && !i) {
+            $("residual-preview").textContent =
+                "Score résiduel : non évalué";
+        } else if (!p || !i) {
+            $("residual-preview").textContent =
+                "Veuillez renseigner les deux valeurs.";
+        } else {
+            const score = Number(p) * Number(i);
+            $("residual-preview").textContent =
+                `Score résiduel : ${score}/25 — ${riskLevelLabel(score)}`;
+        }
+    }
+
+    function resetTreatmentForm() {
+        form.reset();
+        $("treatment-id").value = "";
+        $("treatment-risk").disabled = false;
+        $("treatment-form-title").textContent =
+            "Ajouter un traitement";
+        $("treatment-submit").textContent =
+            "Enregistrer le traitement";
+        updateResidualPreview();
+    }
+
+    residualProbability.addEventListener(
+        "change", updateResidualPreview
+    );
+    residualImpact.addEventListener(
+        "change", updateResidualPreview
+    );
+
+    $("treatment-cancel").addEventListener(
+        "click", resetTreatmentForm
+    );
+
+    form.addEventListener("submit", async event => {
+        event.preventDefault();
+
+        const id = $("treatment-id").value;
+        const riskId = $("treatment-risk").value;
+
+        if (!riskId) {
+            showMessage("Veuillez sélectionner un risque.");
+            return;
+        }
+
+        const p = residualProbability.value;
+        const i = residualImpact.value;
+
+        if ((p && !i) || (!p && i)) {
+            showMessage(
+                "La probabilité et l'impact résiduels doivent être renseignés ensemble."
+            );
+            return;
+        }
+
+        const data = {
+            strategy: $("treatment-strategy").value,
+            action: $("treatment-action").value.trim(),
+            owner: $("treatment-owner").value.trim() || null,
+            due_date: $("treatment-date").value || null,
+            status: $("treatment-status").value,
+            residual_probability: p ? Number(p) : null,
+            residual_impact: i ? Number(i) : null
+        };
+
+        try {
+            if (id) {
+                await API.updateTreatment(Number(id), data);
+            } else {
+                await API.createTreatment(Number(riskId), data);
+            }
+
+            await renderTreatments();
+
+            showMessage(
+                id
+                    ? "Traitement modifié avec succès."
+                    : "Traitement ajouté avec succès.",
+                "success"
+            );
+        } catch (error) {
+            showMessage("Erreur : " + error.message);
+        }
+    });
+
+    $("treatments-content").onclick = async event => {
+        const editButton =
+            event.target.closest("[data-edit-treatment]");
+        const deleteButton =
+            event.target.closest("[data-delete-treatment]");
+
+        if (editButton) {
+            const treatment = appData.treatments.find(
+                t => t.id === Number(editButton.dataset.editTreatment)
+            );
+
+            if (!treatment) return;
+
+            $("treatment-id").value = treatment.id;
+            $("treatment-risk").value = String(treatment.risk_id);
+            $("treatment-risk").disabled = true;
+            $("treatment-strategy").value = treatment.strategy;
+            $("treatment-action").value = treatment.action;
+            $("treatment-owner").value = treatment.owner || "";
+            $("treatment-date").value = treatment.due_date || "";
+            $("treatment-status").value = treatment.status;
+
+            residualProbability.value =
+                treatment.residual_probability ?? "";
+            residualImpact.value =
+                treatment.residual_impact ?? "";
+
+            $("treatment-form-title").textContent =
+                "Modifier le traitement";
+            $("treatment-submit").textContent =
+                "Enregistrer les modifications";
+
+            updateResidualPreview();
+            form.scrollIntoView({ behavior: "smooth" });
+            return;
+        }
+
+        if (deleteButton && canDelete) {
+            const id = Number(deleteButton.dataset.deleteTreatment);
+
+            const treatment = appData.treatments.find(
+                t => t.id === id
+            );
+
+            if (!treatment) return;
+
+            if (!confirm("Voulez-vous supprimer ce traitement ?")) {
+                return;
+            }
+
+            try {
+                await API.deleteTreatment(id);
+                await renderTreatments();
+                showMessage(
+                    "Traitement supprimé avec succès.",
+                    "success"
+                );
+            } catch (error) {
+                showMessage("Erreur : " + error.message);
+            }
+        }
+    };
+
+    updateResidualPreview();
 }
 
 async function loadDashboard() {

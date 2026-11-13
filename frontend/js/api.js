@@ -147,5 +147,27 @@ const API = {
 
     treatments(riskId) {
         return this.request(`/api/risks/${riskId}/treatments`);
+    },
+
+    createTreatment(riskId, data) {
+        return this.request(`/api/risks/${riskId}/treatments`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data)
+        });
+    },
+
+    updateTreatment(id, data) {
+        return this.request(`/api/treatments/${id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data)
+        });
+    },
+
+    deleteTreatment(id) {
+        return this.request(`/api/treatments/${id}`, {
+            method: "DELETE"
+        });
     }
 };
