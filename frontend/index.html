@@ -74,6 +74,9 @@
                 <button class="nav-link" data-section="treatments">
                     <span>✓</span> Traitements
                 </button>
+                <button class="nav-link" data-section="bia">
+                    <span>▣</span> Analyse BIA
+                </button>
             </nav>
 
             <div class="sidebar-bottom">
@@ -113,6 +116,12 @@
                     <div class="banner-symbol">◈</div>
                 </div>
 
+                <div class="report-actions">
+                    <button id="download-report-button" class="primary-button">
+                        ↓ Télécharger le rapport SMCA (PDF)
+                    </button>
+                </div>
+
                 <div class="stats-grid">
                     <article class="stat-card">
                         <div class="stat-icon blue">▤</div>
@@ -137,6 +146,33 @@
                         <p>Risques critiques</p>
                         <strong id="stat-critical">—</strong>
                         <span>Nécessitant une attention</span>
+                    </article>
+                </div>
+
+                <div class="stats-grid">
+                    <article class="stat-card">
+                        <div class="stat-icon blue">▣</div>
+                        <p>Analyses BIA</p>
+                        <strong id="stat-bia-total">—</strong>
+                        <span>Analyses enregistrées</span>
+                    </article>
+                    <article class="stat-card">
+                        <div class="stat-icon red">!</div>
+                        <p>Critiques</p>
+                        <strong id="stat-bia-critical">—</strong>
+                        <span>Criticité 5/5</span>
+                    </article>
+                    <article class="stat-card">
+                        <div class="stat-icon orange">▲</div>
+                        <p>Élevées</p>
+                        <strong id="stat-bia-high">—</strong>
+                        <span>Criticité 4/5</span>
+                    </article>
+                    <article class="stat-card">
+                        <div class="stat-icon purple">●</div>
+                        <p>Modérées ou moins</p>
+                        <strong id="stat-bia-moderate">—</strong>
+                        <span>Criticité de 1 à 3/5</span>
                     </article>
                 </div>
 
@@ -168,6 +204,18 @@
                         </div>
                     </article>
                 </div>
+
+                <article class="panel">
+                    <div class="panel-heading">
+                        <div>
+                            <h3>Répartition des criticités BIA</h3>
+                            <p>Nombre d'analyses par niveau d'impact global</p>
+                        </div>
+                    </div>
+                    <div id="bia-distribution" class="distribution">
+                        <p class="muted">Chargement des données...</p>
+                    </div>
+                </article>
 
                 <article class="panel">
                     <div class="panel-heading">
@@ -229,6 +277,18 @@
                 <article class="panel">
                     <div class="panel-heading"><div><h3>Plans de traitement</h3><p>Actions de réduction et suivi des risques</p></div></div>
                     <div id="treatments-content" class="table-wrap"></div>
+                </article>
+            </section>
+
+            <section id="section-bia" class="content-section hidden">
+                <article class="panel">
+                    <div class="panel-heading">
+                        <div>
+                            <h3>Analyse d'impact sur l'activité</h3>
+                            <p>Évaluation des conséquences d'une interruption des processus métier</p>
+                        </div>
+                    </div>
+                    <div id="bia-content" class="table-wrap"></div>
                 </article>
             </section>
 

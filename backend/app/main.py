@@ -2,13 +2,13 @@ from fastapi import Depends, FastAPI
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from . import models  # Enregistre les modèles SQLAlchemy
+from . import models
 from .database import Base, engine, get_db
-from .routers import assets, auth, processes, risks, treatments, users
+from .routers import assets, auth, bia, processes, reports, risks, treatments, users
 
 app = FastAPI(
     title="RiskMap-SMCA",
-    version="0.3.0",
+    version="0.4.0",
     description="Identification et cartographie des risques d'un SMCA (ISO 22301)",
 )
 
@@ -16,8 +16,10 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(assets.router)
 app.include_router(processes.router)
+app.include_router(bia.router)
 app.include_router(risks.router)
 app.include_router(treatments.router)
+app.include_router(reports.router)
 
 
 @app.on_event("startup")

@@ -39,6 +39,32 @@ class Process(Base):
 
     assets = relationship("Asset", secondary=process_assets, back_populates="processes")
     risks = relationship("Risk", back_populates="process", cascade="all, delete-orphan")
+    bia_analysis = relationship(
+        "BIAAnalysis",
+        back_populates="process",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+
+class BIAAnalysis(Base):
+    """Analyse d'impact sur l'activité associée à un processus."""
+    __tablename__ = "bia_analyses"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    process_id: Mapped[int] = mapped_column(
+        ForeignKey("processes.id", ondelete="CASCADE"),
+        unique=True,
+    )
+    financial_impact: Mapped[int] = mapped_column(Integer)
+    operational_impact: Mapped[int] = mapped_column(Integer)
+    legal_impact: Mapped[int] = mapped_column(Integer)
+    reputational_impact: Mapped[int] = mapped_column(Integer)
+    business_consequences: Mapped[str] = mapped_column(Text)
+    essential_resources: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    process = relationship("Process", back_populates="bia_analysis")
 
 
 class Asset(Base):

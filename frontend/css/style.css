@@ -280,3 +280,37 @@ th { background:#f8fafd;color:var(--muted);font-size:10px; }
         grid-column: auto;
     }
 }
+
+
+/* Module Analyse BIA */
+#bia-content table {
+    min-width: 1000px;
+}
+
+#bia-content td {
+    vertical-align: top;
+    min-width: 100px;
+}
+
+#bia-content td:nth-child(6),
+#bia-content td:nth-child(7) {
+    min-width: 180px;
+    white-space: normal;
+}
+
+
+/* Téléchargement du rapport SMCA */
+.report-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin: 16px 0;
+    flex-wrap: wrap;
+}
+
+.report-actions .primary-button {
+    margin-top: 0;
+}
+
+.report-actions .primary-button:disabled {
+    cursor: wait;
+}

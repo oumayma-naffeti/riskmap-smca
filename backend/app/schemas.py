@@ -165,3 +165,39 @@ class TreatmentOut(BaseModel):
     status: str
     residual_probability: int | None
     residual_impact: int | None
+
+
+# ---------- Analyse d'impact sur l'activité (BIA) ----------
+class BIACreate(BaseModel):
+    process_id: int
+    financial_impact: Scale5
+    operational_impact: Scale5
+    legal_impact: Scale5
+    reputational_impact: Scale5
+    business_consequences: str = Field(min_length=10, max_length=5000)
+    essential_resources: str | None = Field(default=None, max_length=5000)
+
+
+class BIAUpdate(BaseModel):
+    financial_impact: Scale5 | None = None
+    operational_impact: Scale5 | None = None
+    legal_impact: Scale5 | None = None
+    reputational_impact: Scale5 | None = None
+    business_consequences: str | None = Field(
+        default=None, min_length=10, max_length=5000
+    )
+    essential_resources: str | None = Field(default=None, max_length=5000)
+
+
+class BIAOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    process_id: int
+    financial_impact: int
+    operational_impact: int
+    legal_impact: int
+    reputational_impact: int
+    business_consequences: str
+    essential_resources: str | None
+    created_at: datetime

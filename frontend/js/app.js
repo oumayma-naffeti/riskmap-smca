@@ -5,7 +5,8 @@ let appData = {
     processes: [],
     assets: [],
     risks: [],
-    treatments: []
+    treatments: [],
+    bia: []
 };
 
 const titles = {
@@ -14,7 +15,8 @@ const titles = {
     assets: "Actifs",
     risks: "Cartographie des risques",
     matrix: "Matrice des risques",
-    treatments: "Traitement des risques"
+    treatments: "Traitement des risques",
+    bia: "Analyse d’impact métier (BIA)"
 };
 
 function escapeHTML(value) {
@@ -78,7 +80,51 @@ function assetName(id) {
 }
 
 function renderDashboard() {
-    const { processes, assets, risks } = appData;
+    const { processes, assets, risks, bia } = appData;
+
+    const biaLevels = bia.map(item => Math.max(
+        item.financial_impact,
+        item.operational_impact,
+        item.legal_impact,
+        item.reputational_impact
+    ));
+
+    $("stat-bia-total").textContent = bia.length;
+    $("stat-bia-critical").textContent =
+        biaLevels.filter(level => level === 5).length;
+    $("stat-bia-high").textContent =
+        biaLevels.filter(level => level === 4).length;
+    $("stat-bia-moderate").textContent =
+        biaLevels.filter(level => level <= 3).length;
+
+    const biaLabels = {
+        1: "Très faible",
+        2: "Faible",
+        3: "Moyen",
+        4: "Élevé",
+        5: "Critique"
+    };
+
+    const biaMax = Math.max(1, ...[1, 2, 3, 4, 5].map(
+        level => biaLevels.filter(value => value === level).length
+    ));
+
+    $("bia-distribution").innerHTML = [1, 2, 3, 4, 5].map(level => {
+        const count = biaLevels.filter(value => value === level).length;
+        const barLength = count === 0
+            ? 0
+            : Math.max(1, Math.round((count / biaMax) * 20));
+
+        return `
+            <div class="distribution-row">
+                <span>${biaLabels[level]}</span>
+                <span class="bia-bar" aria-label="${count} analyse(s)">
+                    ${"█".repeat(barLength) || "—"}
+                </span>
+                <strong>${count}</strong>
+            </div>
+        `;
+    }).join("");
 
     $("stat-processes").textContent = processes.length;
     $("stat-assets").textContent = assets.length;
@@ -1159,15 +1205,17 @@ async function loadDashboard() {
     hideMessage();
 
     try {
-        const [processes, assets, risks] = await Promise.all([
+        const [processes, assets, risks, bia] = await Promise.all([
             API.processes(),
             API.assets(),
-            API.risks()
+            API.risks(),
+            API.bia()
         ]);
 
         appData.processes = processes;
         appData.assets = assets;
         appData.risks = risks;
+        appData.bia = bia;
 
         renderDashboard();
         renderProcesses();
@@ -1202,6 +1250,7 @@ async function navigate(section) {
     try {
         if (section === "matrix") await renderMatrix();
         if (section === "treatments") await renderTreatments();
+        if (section === "bia") await renderBIA();
     } catch (error) {
         showMessage("Erreur : " + error.message);
     }
@@ -1242,6 +1291,33 @@ document.querySelectorAll(".nav-link").forEach(link => {
 
 $("logout-button").addEventListener("click", showLogin);
 
+
+$("download-report-button").addEventListener("click", async () => {
+    const button = $("download-report-button");
+    const originalText = button.textContent;
+
+    button.disabled = true;
+    button.textContent = "Génération du rapport...";
+
+    hideMessage();
+
+    try {
+        const filename = await API.downloadReport();
+        showMessage(
+            `Rapport téléchargé avec succès : ${filename}`,
+            "success"
+        );
+    } catch (error) {
+        showMessage(
+            "Impossible de télécharger le rapport : " + error.message
+        );
+    } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+    }
+});
+
+
 async function initializeApp() {
     if (!API.getToken()) {
         showLogin();
@@ -1257,3 +1333,249 @@ async function initializeApp() {
 }
 
 document.addEventListener("DOMContentLoaded", initializeApp);
+
+
+// ---------- Analyse d'impact sur l'activité (BIA) ----------
+async function renderBIA() {
+    const canWrite = ["admin", "analyste"].includes(currentUser?.role);
+    const canDelete = currentUser?.role === "admin";
+
+    appData.bia = await API.bia();
+
+    const impactOptions = `
+        <option value="1">1 - Très faible</option>
+        <option value="2">2 - Faible</option>
+        <option value="3">3 - Moyen</option>
+        <option value="4">4 - Élevé</option>
+        <option value="5">5 - Très élevé</option>
+    `;
+
+    const impactLabel = value => ({
+        1: "Très faible",
+        2: "Faible",
+        3: "Moyen",
+        4: "Élevé",
+        5: "Critique"
+    }[value] || "—");
+
+    $("bia-content").innerHTML = `
+        ${canWrite ? `
+        <div class="process-form-card">
+            <h3 id="bia-form-title">Nouvelle analyse BIA</h3>
+
+            <form id="bia-form">
+                <input type="hidden" id="bia-id">
+
+                <div class="process-form-grid">
+                    <div class="form-field full-width">
+                        <label for="bia-process">Processus métier *</label>
+                        <select id="bia-process" required>
+                            <option value="">Sélectionner un processus</option>
+                            ${appData.processes.map(p => `
+                                <option value="${p.id}">
+                                    ${escapeHTML(p.name)}
+                                </option>
+                            `).join("")}
+                        </select>
+                    </div>
+
+                    <div class="form-field">
+                        <label for="bia-financial">Impact financier *</label>
+                        <select id="bia-financial" required>${impactOptions}</select>
+                    </div>
+
+                    <div class="form-field">
+                        <label for="bia-operational">Impact opérationnel *</label>
+                        <select id="bia-operational" required>${impactOptions}</select>
+                    </div>
+
+                    <div class="form-field">
+                        <label for="bia-legal">Impact juridique *</label>
+                        <select id="bia-legal" required>${impactOptions}</select>
+                    </div>
+
+                    <div class="form-field">
+                        <label for="bia-reputational">Impact réputationnel *</label>
+                        <select id="bia-reputational" required>${impactOptions}</select>
+                    </div>
+
+                    <div class="form-field full-width">
+                        <label for="bia-consequences">Conséquences métier *</label>
+                        <textarea id="bia-consequences" minlength="10"
+                            maxlength="5000" rows="4" required
+                            placeholder="Décrire les conséquences d'une interruption de ce processus..."></textarea>
+                    </div>
+
+                    <div class="form-field full-width">
+                        <label for="bia-resources">Ressources essentielles</label>
+                        <textarea id="bia-resources" maxlength="5000" rows="3"
+                            placeholder="Personnel, systèmes informatiques, fournisseurs, locaux..."></textarea>
+                    </div>
+                </div>
+
+                <div class="process-form-actions">
+                    <button type="submit" class="primary-button" id="bia-submit">
+                        Enregistrer l'analyse
+                    </button>
+                    <button type="button" class="secondary-button" id="bia-cancel">
+                        Annuler
+                    </button>
+                </div>
+            </form>
+        </div>
+        ` : ""}
+
+        <div class="process-form-card">
+            <h3>Registre des analyses BIA</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Processus</th>
+                        <th>Financier</th>
+                        <th>Opérationnel</th>
+                        <th>Juridique</th>
+                        <th>Réputationnel</th>
+                        <th>Criticité globale</th>
+                        <th>Conséquences métier</th>
+                        <th>Ressources essentielles</th>
+                        ${canWrite ? "<th>Actions</th>" : ""}
+                    </tr>
+                </thead>
+                <tbody>
+                    ${appData.bia.map(item => {
+                        const process = appData.processes.find(
+                            p => p.id === item.process_id
+                        );
+                        const globalImpact = Math.max(
+                            item.financial_impact,
+                            item.operational_impact,
+                            item.legal_impact,
+                            item.reputational_impact
+                        );
+                        return `
+                        <tr>
+                            <td>${escapeHTML(process?.name || `Processus #${item.process_id}`)}</td>
+                            <td>${item.financial_impact}/5 — ${impactLabel(item.financial_impact)}</td>
+                            <td>${item.operational_impact}/5 — ${impactLabel(item.operational_impact)}</td>
+                            <td>${item.legal_impact}/5 — ${impactLabel(item.legal_impact)}</td>
+                            <td>${item.reputational_impact}/5 — ${impactLabel(item.reputational_impact)}</td>
+                            <td><strong>${globalImpact}/5 — ${impactLabel(globalImpact)}</strong></td>
+                            <td>${escapeHTML(item.business_consequences)}</td>
+                            <td>${escapeHTML(item.essential_resources || "—")}</td>
+                            ${canWrite ? `
+                            <td class="process-actions">
+                                <button class="action-button" data-edit-bia="${item.id}">
+                                    Modifier
+                                </button>
+                                ${canDelete ? `
+                                <button class="action-button danger-button" data-delete-bia="${item.id}">
+                                    Supprimer
+                                </button>` : ""}
+                            </td>` : ""}
+                        </tr>`;
+                    }).join("") || `
+                        <tr>
+                            <td colspan="${canWrite ? 8 : 7}">
+                                Aucune analyse BIA enregistrée.
+                            </td>
+                        </tr>
+                    `}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    if (!canWrite) return;
+
+    const form = $("bia-form");
+
+    function resetBIAForm() {
+        form.reset();
+        $("bia-id").value = "";
+        $("bia-process").disabled = false;
+        $("bia-form-title").textContent = "Nouvelle analyse BIA";
+        $("bia-submit").textContent = "Enregistrer l'analyse";
+    }
+
+    $("bia-cancel").addEventListener("click", resetBIAForm);
+
+    form.addEventListener("submit", async event => {
+        event.preventDefault();
+
+        const id = $("bia-id").value;
+        const processId = $("bia-process").value;
+
+        if (!id && !processId) {
+            showMessage("Veuillez sélectionner un processus.");
+            return;
+        }
+
+        const data = {
+            financial_impact: Number($("bia-financial").value),
+            operational_impact: Number($("bia-operational").value),
+            legal_impact: Number($("bia-legal").value),
+            reputational_impact: Number($("bia-reputational").value),
+            business_consequences: $("bia-consequences").value.trim(),
+            essential_resources: $("bia-resources").value.trim() || null
+        };
+
+        if (!id) data.process_id = Number(processId);
+
+        try {
+            if (id) {
+                await API.updateBIA(Number(id), data);
+            } else {
+                await API.createBIA(data);
+            }
+
+            await renderBIA();
+            showMessage(
+                id ? "Analyse BIA modifiée avec succès."
+                   : "Analyse BIA créée avec succès.",
+                "success"
+            );
+        } catch (error) {
+            showMessage("Erreur : " + error.message);
+        }
+    });
+
+    $("bia-content").addEventListener("click", async event => {
+        const editButton = event.target.closest("[data-edit-bia]");
+        const deleteButton = event.target.closest("[data-delete-bia]");
+
+        if (editButton) {
+            const item = appData.bia.find(
+                entry => entry.id === Number(editButton.dataset.editBia)
+            );
+            if (!item) return;
+
+            $("bia-id").value = item.id;
+            $("bia-process").value = String(item.process_id);
+            $("bia-process").disabled = true;
+            $("bia-financial").value = item.financial_impact;
+            $("bia-operational").value = item.operational_impact;
+            $("bia-legal").value = item.legal_impact;
+            $("bia-reputational").value = item.reputational_impact;
+            $("bia-consequences").value = item.business_consequences;
+            $("bia-resources").value = item.essential_resources || "";
+
+            $("bia-form-title").textContent = "Modifier l'analyse BIA";
+            $("bia-submit").textContent = "Enregistrer les modifications";
+            form.scrollIntoView({ behavior: "smooth" });
+            return;
+        }
+
+        if (deleteButton && canDelete) {
+            const id = Number(deleteButton.dataset.deleteBia);
+            if (!confirm("Voulez-vous supprimer cette analyse BIA ?")) return;
+
+            try {
+                await API.deleteBIA(id);
+                await renderBIA();
+                showMessage("Analyse BIA supprimée avec succès.", "success");
+            } catch (error) {
+                showMessage("Erreur : " + error.message);
+            }
+        }
+    });
+}

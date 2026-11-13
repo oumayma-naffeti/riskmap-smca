@@ -145,6 +145,32 @@ const API = {
         return this.request("/api/risks/matrix");
     },
 
+    bia() {
+        return this.request("/api/bia");
+    },
+
+    createBIA(data) {
+        return this.request("/api/bia", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data)
+        });
+    },
+
+    updateBIA(id, data) {
+        return this.request(`/api/bia/${id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data)
+        });
+    },
+
+    deleteBIA(id) {
+        return this.request(`/api/bia/${id}`, {
+            method: "DELETE"
+        });
+    },
+
     treatments(riskId) {
         return this.request(`/api/risks/${riskId}/treatments`);
     },
@@ -169,5 +195,47 @@ const API = {
         return this.request(`/api/treatments/${id}`, {
             method: "DELETE"
         });
-    }
+    },
+
+    async downloadReport() {
+        const token = this.getToken();
+
+        const response = await fetch("/api/reports/smca/pdf", {
+            method: "GET",
+            headers: token
+                ? { Authorization: `Bearer ${token}` }
+                : {}
+        });
+
+        if (!response.ok) {
+            let message = `Erreur HTTP ${response.status}`;
+            try {
+                const data = await response.json();
+                message = data.detail || message;
+            } catch (_) {}
+            throw new Error(message);
+        }
+
+        const blob = await response.blob();
+
+        const disposition = response.headers.get("Content-Disposition") || "";
+        const match = disposition.match(/filename="?([^";]+)"?/i);
+        const filename = match
+            ? match[1]
+            : "rapport_smca.pdf";
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+        return filename;
+    },
+
 };
