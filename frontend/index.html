@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="RiskMap-SMCA - Gestion et cartographie des risques">
+    <title>RiskMap-SMCA | Gestion des risques</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <!-- PAGE DE CONNEXION -->
+    <main id="login-page" class="login-page">
+        <section class="login-card">
+            <div class="brand brand-login">
+                <div class="brand-icon">R</div>
+                <div>
+                    <h1>RiskMap-SMCA</h1>
+                    <p>Business Continuity Risk Management</p>
+                </div>
+            </div>
+
+            <div class="login-heading">
+                <h2>Bienvenue</h2>
+                <p>Connectez-vous pour accéder à votre espace de gestion des risques.</p>
+            </div>
+
+            <form id="login-form">
+                <label for="username">Nom d'utilisateur</label>
+                <input id="username" name="username" type="text"
+                       placeholder="Votre identifiant" autocomplete="username" required>
+
+                <label for="password">Mot de passe</label>
+                <input id="password" name="password" type="password"
+                       placeholder="Votre mot de passe" autocomplete="current-password" required>
+
+                <p id="login-error" class="message error hidden"></p>
+                <button type="submit" id="login-button" class="primary-button">
+                    Se connecter
+                </button>
+            </form>
+
+            <p class="login-footer">RiskMap-SMCA · ISO 22301</p>
+        </section>
+    </main>
+
+    <!-- APPLICATION -->
+    <div id="app-page" class="app-layout hidden">
+        <aside class="sidebar">
+            <div class="brand sidebar-brand">
+                <div class="brand-icon">R</div>
+                <div>
+                    <h2>RiskMap-SMCA</h2>
+                    <p>Risk Management</p>
+                </div>
+            </div>
+
+            <div class="nav-label">MENU PRINCIPAL</div>
+            <nav class="navigation">
+                <button class="nav-link active" data-section="dashboard">
+                    <span>▦</span> Tableau de bord
+                </button>
+                <button class="nav-link" data-section="processes">
+                    <span>▤</span> Processus
+                </button>
+                <button class="nav-link" data-section="assets">
+                    <span>▧</span> Actifs
+                </button>
+                <button class="nav-link" data-section="risks">
+                    <span>⚠</span> Risques
+                </button>
+                <button class="nav-link" data-section="matrix">
+                    <span>▦</span> Matrice des risques
+                </button>
+                <button class="nav-link" data-section="treatments">
+                    <span>✓</span> Traitements
+                </button>
+            </nav>
+
+            <div class="sidebar-bottom">
+                <div class="user-card">
+                    <div class="avatar" id="user-avatar">A</div>
+                    <div class="user-info">
+                        <strong id="sidebar-username">Utilisateur</strong>
+                        <span id="sidebar-role">Compte</span>
+                    </div>
+                </div>
+                <button id="logout-button" class="logout-button">↪ Déconnexion</button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header class="topbar">
+                <div>
+                    <p class="breadcrumb">RiskMap-SMCA / <span id="breadcrumb-section">Tableau de bord</span></p>
+                    <h1 id="page-title">Tableau de bord</h1>
+                </div>
+                <div class="topbar-status">
+                    <span class="status-dot"></span>
+                    Système connecté
+                </div>
+            </header>
+
+            <div id="global-message" class="message hidden"></div>
+
+            <!-- DASHBOARD -->
+            <section id="section-dashboard" class="content-section">
+                <div class="welcome-banner">
+                    <div>
+                        <p class="eyebrow">VUE GLOBALE</p>
+                        <h2>Suivi de la continuité d'activité</h2>
+                        <p>Visualisez les processus, les actifs et les risques de votre organisation.</p>
+                    </div>
+                    <div class="banner-symbol">◈</div>
+                </div>
+
+                <div class="stats-grid">
+                    <article class="stat-card">
+                        <div class="stat-icon blue">▤</div>
+                        <p>Processus</p>
+                        <strong id="stat-processes">—</strong>
+                        <span>Processus enregistrés</span>
+                    </article>
+                    <article class="stat-card">
+                        <div class="stat-icon purple">▧</div>
+                        <p>Actifs</p>
+                        <strong id="stat-assets">—</strong>
+                        <span>Actifs identifiés</span>
+                    </article>
+                    <article class="stat-card">
+                        <div class="stat-icon orange">⚠</div>
+                        <p>Risques</p>
+                        <strong id="stat-risks">—</strong>
+                        <span>Risques recensés</span>
+                    </article>
+                    <article class="stat-card">
+                        <div class="stat-icon red">!</div>
+                        <p>Risques critiques</p>
+                        <strong id="stat-critical">—</strong>
+                        <span>Nécessitant une attention</span>
+                    </article>
+                </div>
+
+                <div class="dashboard-grid">
+                    <article class="panel">
+                        <div class="panel-heading">
+                            <div>
+                                <h3>Répartition des risques</h3>
+                                <p>Nombre de risques par niveau</p>
+                            </div>
+                        </div>
+                        <div id="risk-distribution" class="distribution">
+                            <p class="muted">Chargement des données...</p>
+                        </div>
+                    </article>
+
+                    <article class="panel">
+                        <div class="panel-heading">
+                            <div>
+                                <h3>Informations du système</h3>
+                                <p>État de l'application</p>
+                            </div>
+                        </div>
+                        <div class="system-info">
+                            <div><span>Backend</span><strong class="healthy">Connecté</strong></div>
+                            <div><span>Base de données</span><strong class="healthy">Connectée</strong></div>
+                            <div><span>Utilisateur</span><strong id="current-username">—</strong></div>
+                            <div><span>Rôle</span><strong id="current-role">—</strong></div>
+                        </div>
+                    </article>
+                </div>
+
+                <article class="panel">
+                    <div class="panel-heading">
+                        <div>
+                            <h3>Risques récemment recensés</h3>
+                            <p>Vue synthétique des risques enregistrés</p>
+                        </div>
+                        <button class="text-button" data-go="risks">Voir les risques →</button>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Menace</th>
+                                    <th>Probabilité</th>
+                                    <th>Impact</th>
+                                    <th>Score</th>
+                                    <th>Niveau</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recent-risks">
+                                <tr><td colspan="5" class="empty-cell">Chargement...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </article>
+            </section>
+
+            <!-- AUTRES SECTIONS : développées dans les prochaines étapes -->
+            <section id="section-processes" class="content-section hidden">
+                <article class="panel">
+                    <div class="panel-heading"><div><h3>Gestion des processus</h3><p>Processus et analyse d'impact sur l'activité</p></div></div>
+                    <div id="processes-content" class="table-wrap"></div>
+                </article>
+            </section>
+
+            <section id="section-assets" class="content-section hidden">
+                <article class="panel">
+                    <div class="panel-heading"><div><h3>Gestion des actifs</h3><p>Ressources associées aux processus</p></div></div>
+                    <div id="assets-content" class="table-wrap"></div>
+                </article>
+            </section>
+
+            <section id="section-risks" class="content-section hidden">
+                <article class="panel">
+                    <div class="panel-heading"><div><h3>Registre des risques</h3><p>Risques identifiés et évalués</p></div></div>
+                    <div id="risks-content" class="table-wrap"></div>
+                </article>
+            </section>
+
+            <section id="section-matrix" class="content-section hidden">
+                <article class="panel">
+                    <div class="panel-heading"><div><h3>Matrice des risques 5 × 5</h3><p>Cartographie selon la probabilité et l'impact</p></div></div>
+                    <div id="matrix-content" class="matrix-container"></div>
+                </article>
+            </section>
+
+            <section id="section-treatments" class="content-section hidden">
+                <article class="panel">
+                    <div class="panel-heading"><div><h3>Plans de traitement</h3><p>Actions de réduction et suivi des risques</p></div></div>
+                    <div id="treatments-content" class="table-wrap"></div>
+                </article>
+            </section>
+
+            <footer class="app-footer">RiskMap-SMCA · Projet SMCA · ISO 22301</footer>
+        </main>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>
