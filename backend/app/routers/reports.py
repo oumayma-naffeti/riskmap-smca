@@ -2,7 +2,7 @@ from datetime import date, datetime
 from html import escape
 from io import BytesIO
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
@@ -143,7 +143,20 @@ def page_header_footer(canvas, doc):
 
 
 @router.get("/smca/pdf", summary="Télécharger le rapport SMCA au format PDF")
-def download_smca_report(db: Session = Depends(get_db)):
+def download_smca_report(
+    process_ids: str | None = Query(
+        default=None,
+        description="IDs de processus séparés par des virgules (ex. 6,7,8,9). Vide = tout le rapport.",
+    ),
+    title: str | None = Query(
+        default=None, max_length=120, description="Périmètre affiché sur la couverture"
+    ),
+    db: Session = Depends(get_db),
+):
+    try:
+        ids = {int(x) for x in process_ids.split(",") if x.strip()} if process_ids else set()
+    except ValueError:
+        raise HTTPException(422, "process_ids doit être une liste d'entiers séparés par des virgules")
     processes = db.scalars(
         select(Process)
         .options(
@@ -182,6 +195,13 @@ def download_smca_report(db: Session = Depends(get_db)):
         )
         .order_by(Treatment.id)
     ).all()
+
+    if ids:  # filtre par cas d'étude : on ne garde que les processus demandés et ce qui s'y rattache
+        processes = [p for p in processes if p.id in ids]
+        assets = [a for a in assets if any(p.id in ids for p in a.processes)]
+        risks = [r for r in risks if r.process_id in ids]
+        bia_analyses = [b for b in bia_analyses if b.process_id in ids]
+        treatments = [t for t in treatments if t.risk and t.risk.process_id in ids]
 
     buffer = BytesIO()
     document = SimpleDocTemplate(
@@ -287,7 +307,7 @@ def download_smca_report(db: Session = Depends(get_db)):
     cover_data = [
         [cell("PÉRIMÈTRE", True), cell("RÉFÉRENTIELS", True), cell("DATE DE GÉNÉRATION", True)],
         [
-            cell("Identification et cartographie des risques liés à la continuité d'activité"),
+            cell(title or "Identification et cartographie des risques liés à la continuité d'activité"),
             cell("ISO 22301 · ISO 31000"),
             cell(datetime.now().strftime("%d/%m/%Y à %H:%M")),
         ],
@@ -569,7 +589,8 @@ def download_smca_report(db: Session = Depends(get_db)):
     )
 
     buffer.seek(0)
-    filename = f"rapport_smca_{date.today().isoformat()}.pdf"
+    suffix = "_p" + "-".join(str(i) for i in sorted(ids)) if ids else ""
+    filename = f"rapport_smca{suffix}_{date.today().isoformat()}.pdf"
 
     return StreamingResponse(
         buffer,
