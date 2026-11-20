@@ -4,6 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..audit import log_action
 from ..deps import get_current_user
 from ..models import User
 from ..schemas import SetupAdmin, Token, UserOut
