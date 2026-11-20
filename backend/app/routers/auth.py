@@ -27,16 +27,19 @@ def setup_first_admin(data: SetupAdmin, db: Session = Depends(get_db)):
 @router.post("/login", response_model=Token)
 def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.scalar(select(User).where(User.username == form.username))
-    # Toujours vérifier un hash, même si l'utilisateur n'existe pas (anti-énumération)
     ok = verify_password(form.password, user.password_hash if user else DUMMY_HASH)
     if not user or not ok:
+        # commit AVANT le raise : sinon l'exception annule la transaction et la trace disparaît
+        log_action(db, user, "échec connexion", "auth", None,
+                   f"identifiant essayé : {form.username[:50]}")
+        db.commit()
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED, "Nom d'utilisateur ou mot de passe incorrect",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    log_action(db, user, "connexion", "auth", user.id)
+    db.commit()
     return Token(access_token=create_access_token(user.username))
-
-
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_current_user)):
     return user

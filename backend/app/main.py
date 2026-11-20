@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from . import models
 from .database import Base, engine, get_db
-from .routers import assets, auth, bia, processes, reports, risks, treatments, users
+from .routers import assets, audit, auth, bia, processes, reports, risks, treatments, users
 
 app = FastAPI(
     title="RiskMap-SMCA",
@@ -20,7 +20,7 @@ app.include_router(bia.router)
 app.include_router(risks.router)
 app.include_router(treatments.router)
 app.include_router(reports.router)
-
+app.include_router(audit.router)
 
 @app.on_event("startup")
 def create_tables():

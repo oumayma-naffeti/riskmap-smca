@@ -16,7 +16,8 @@ const titles = {
     risks: "Cartographie des risques",
     matrix: "Matrice des risques",
     treatments: "Traitement des risques",
-    bia: "Analyse d’impact métier (BIA)"
+    bia: "Analyse d’impact métier (BIA)",
+    audit: "Journal d'audit"
 };
 
 function escapeHTML(value) {
@@ -47,6 +48,7 @@ function showApp(user) {
     $("user-avatar").textContent = user.username[0].toUpperCase();
     $("current-username").textContent = user.username;
     $("current-role").textContent = user.role;
+    $("nav-audit").classList.toggle("hidden", user.role !== "admin");
 
     loadDashboard();
 }
@@ -1251,6 +1253,7 @@ async function navigate(section) {
         if (section === "matrix") await renderMatrix();
         if (section === "treatments") await renderTreatments();
         if (section === "bia") await renderBIA();
+        if (section === "audit") await renderAudit();
     } catch (error) {
         showMessage("Erreur : " + error.message);
     }
@@ -1578,4 +1581,25 @@ async function renderBIA() {
             }
         }
     });
+}
+
+async function renderAudit() {
+    const logs = await API.auditLogs();
+
+    $("audit-content").innerHTML = logs.length === 0
+        ? "<p>Aucune action enregistrée.</p>"
+        : `<table>
+            <thead><tr>
+                <th>Date</th><th>Utilisateur</th><th>Action</th><th>Objet</th><th>Détails</th>
+            </tr></thead>
+            <tbody>
+            ${logs.map(l => `<tr>
+                <td>${escapeHTML(new Date(l.created_at).toLocaleString("fr-FR"))}</td>
+                <td>${escapeHTML(l.username)}</td>
+                <td>${escapeHTML(l.action)}</td>
+                <td>${escapeHTML(l.entity_type)}${l.entity_id ? " #" + l.entity_id : ""}</td>
+                <td>${escapeHTML(l.details)}</td>
+            </tr>`).join("")}
+            </tbody>
+        </table>`;
 }

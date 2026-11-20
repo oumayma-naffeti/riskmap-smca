@@ -112,3 +112,15 @@ class Treatment(Base):
     residual_impact: Mapped[int | None]
 
     risk = relationship("Risk", back_populates="treatments")
+class AuditLog(Base):
+    """Journal d'audit : une ligne par action importante. Jamais modifié ni supprimé."""
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    username: Mapped[str] = mapped_column(String(50))  # copie du nom, garde la trace même si le compte est supprimé
+    action: Mapped[str] = mapped_column(String(30), index=True)       # création | modification | suppression | connexion | échec connexion
+    entity_type: Mapped[str] = mapped_column(String(30), index=True)  # risque | traitement | processus | actif | bia | utilisateur | auth
+    entity_id: Mapped[int | None]
+    details: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)

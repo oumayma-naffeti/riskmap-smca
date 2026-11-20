@@ -197,6 +197,10 @@ const API = {
         });
     },
 
+    auditLogs(limit = 100) {
+        return this.request(`/api/audit-logs?limit=${limit}`);
+    },
+
     async downloadReport() {
         const token = this.getToken();
 

@@ -3,7 +3,8 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
-
+from ..audit import describe_changes, log_action
+from ..models import Asset, Process, Risk, User
 from ..database import get_db
 from ..deps import get_current_user, require_role
 from ..models import Asset, Process, Risk
@@ -70,33 +71,45 @@ def get_risk(risk_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=RiskOut, status_code=201, dependencies=[writer])
-def create_risk(data: RiskCreate, db: Session = Depends(get_db)):
+def create_risk(data: RiskCreate, db: Session = Depends(get_db),
+                user: User = Depends(get_current_user)):
     if db.get(Process, data.process_id) is None:
         raise HTTPException(404, "Processus introuvable")
     _check_asset(db, data.asset_id)
     risk = Risk(**data.model_dump(), score=compute_score(data.probability, data.impact))
     db.add(risk)
+    db.flush()  # donne risk.id sans valider la transaction
+    log_action(db, user, "création", "risque", risk.id,
+               f"{risk.threat} (score {risk.score})")
     db.commit()
     db.refresh(risk)
     return RiskOut.model_validate(risk)
 
 
 @router.put("/{risk_id}", response_model=RiskOut, dependencies=[writer])
-def update_risk(risk_id: int, data: RiskUpdate, db: Session = Depends(get_db)):
+def update_risk(risk_id: int, data: RiskUpdate, db: Session = Depends(get_db),
+                user: User = Depends(get_current_user)):
     risk = _get(db, risk_id)
-    for key, value in data.model_dump(exclude_unset=True).items():
-        if value is None and key != "asset_id":
-            continue
-        if key == "asset_id":
-            _check_asset(db, value)
+    changes = {k: v for k, v in data.model_dump(exclude_unset=True).items()
+               if v is not None or k == "asset_id"}
+    if "asset_id" in changes:
+        _check_asset(db, changes["asset_id"])
+    details = describe_changes(risk, changes)      # AVANT les setattr
+    for key, value in changes.items():
         setattr(risk, key, value)
     risk.score = compute_score(risk.probability, risk.impact)  # toujours recalculé côté serveur
+    log_action(db, user, "modification", "risque", risk.id, details)
     db.commit()
     db.refresh(risk)
     return RiskOut.model_validate(risk)
 
 
 @router.delete("/{risk_id}", status_code=204, dependencies=[writer])
-def delete_risk(risk_id: int, db: Session = Depends(get_db)):
-    db.delete(_get(db, risk_id))
+def delete_risk(risk_id: int, db: Session = Depends(get_db),
+                user: User = Depends(get_current_user)):
+    risk = _get(db, risk_id)
+    # On note le contenu AVANT de supprimer, sinon on ne saura plus ce qui a disparu
+    log_action(db, user, "suppression", "risque", risk.id,
+               f"{risk.threat} (score {risk.score})")
+    db.delete(risk)
     db.commit()

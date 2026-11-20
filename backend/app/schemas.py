@@ -201,3 +201,12 @@ class BIAOut(BaseModel):
     business_consequences: str
     essential_resources: str | None
     created_at: datetime
+class AuditLogOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    username: str
+    action: str
+    entity_type: str
+    entity_id: int | None
+    details: str | None
+    created_at: datetime
