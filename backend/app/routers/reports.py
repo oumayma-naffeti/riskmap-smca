@@ -24,6 +24,8 @@ from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
 from ..deps import get_current_user
+from ..control_models import Control
+from ..kri_models import KRI, KRIMeasure
 from ..models import Asset, BIAAnalysis, Process, Risk, Treatment
 
 
@@ -203,6 +205,36 @@ def download_smca_report(
         bia_analyses = [b for b in bia_analyses if b.process_id in ids]
         treatments = [t for t in treatments if t.risk and t.risk.process_id in ids]
 
+    # Contrôles et KRI, limités aux risques du périmètre
+    visible_risk_ids = {r.id for r in risks}
+    risk_by_id = {r.id: r for r in risks}
+    controls = [
+        c for c in db.scalars(select(Control).order_by(Control.id)).all()
+        if c.risk_id in visible_risk_ids
+    ]
+    kris = [
+        k for k in db.scalars(select(KRI).order_by(KRI.id)).all()
+        if k.risk_id in visible_risk_ids
+    ]
+    last_measure = {}
+    for m in db.scalars(
+        select(KRIMeasure).order_by(KRIMeasure.measured_at, KRIMeasure.id)
+    ).all():
+        last_measure[m.kri_id] = m  # la dernière du tri croissant = la plus récente
+
+    def kri_state(k):
+        m = last_measure.get(k.id)
+        if m is None:
+            return "Sans mesure"
+        breached = m.value > k.threshold if k.alert_when == "au-dessus" else m.value < k.threshold
+        return "ALERTE" if breached else "Normal"
+
+    def risk_ref(risk_id):
+        r = risk_by_id.get(risk_id)
+        return f"{r.code or '#' + str(r.id)} — {r.threat}" if r else "—"
+
+    today = date.today()
+
     buffer = BytesIO()
     document = SimpleDocTemplate(
         buffer,
@@ -346,6 +378,8 @@ def download_smca_report(
         [cell("BIA critiques"), cell(bia_critical)],
         [cell("BIA élevées"), cell(bia_high)],
         [cell("Plans de traitement"), cell(len(treatments))],
+        [cell("Contrôles enregistrés"), cell(len(controls))],
+        [cell("KRI en alerte"), cell(f"{sum(1 for k in kris if kri_state(k) == 'ALERTE')} / {len(kris)}")],
     ]
     story.append(make_table(summary_data, [100 * mm, 40 * mm]))
     story.append(Spacer(1, 4 * mm))
@@ -558,8 +592,64 @@ def download_smca_report(
         [42 * mm, 25 * mm, 70 * mm, 32 * mm, 25 * mm, 25 * mm, 30 * mm],
     ))
 
+    # CONTRÔLES
+    story.append(PageBreak())
+    add_section(story, "8. Contrôles des risques", styles)
+    control_data = [[
+        cell("Risque", True), cell("Contrôle", True), cell("Type", True),
+        cell("Efficacité", True), cell("Responsable", True),
+        cell("Dernier test", True), cell("Prochain test", True),
+    ]]
+    for c in controls:
+        nxt = "—"
+        if c.next_test_date:
+            nxt = c.next_test_date.strftime("%d/%m/%Y")
+            if c.next_test_date < today:
+                nxt += f" (en retard de {(today - c.next_test_date).days} j)"
+        control_data.append([
+            cell(risk_ref(c.risk_id)),
+            cell(c.name),
+            cell(c.control_type),
+            cell(c.effectiveness),
+            cell(c.owner),
+            cell(c.last_test_date.strftime("%d/%m/%Y") if c.last_test_date else "—"),
+            cell(nxt),
+        ])
+    if not controls:
+        control_data.append([cell("Aucun contrôle enregistré")] + [cell("—")] * 6)
+    story.append(make_table(
+        control_data,
+        [55 * mm, 50 * mm, 25 * mm, 28 * mm, 32 * mm, 25 * mm, 42 * mm],
+    ))
+
+    # KRI
+    add_section(story, "9. Indicateurs clés de risque (KRI)", styles)
+    kri_data = [[
+        cell("Risque", True), cell("Indicateur", True), cell("Seuil d'alerte", True),
+        cell("Dernière mesure", True), cell("Date", True),
+        cell("État", True), cell("Responsable", True),
+    ]]
+    for k in kris:
+        m = last_measure.get(k.id)
+        unit = f" {k.unit}" if k.unit else ""
+        kri_data.append([
+            cell(risk_ref(k.risk_id)),
+            cell(k.name),
+            cell(f"{k.alert_when} {k.threshold:g}{unit}"),
+            cell(f"{m.value:g}{unit}" if m else "—"),
+            cell(m.measured_at.strftime("%d/%m/%Y") if m else "—"),
+            cell(kri_state(k)),
+            cell(k.owner),
+        ])
+    if not kris:
+        kri_data.append([cell("Aucun KRI enregistré")] + [cell("—")] * 6)
+    story.append(make_table(
+        kri_data,
+        [55 * mm, 55 * mm, 35 * mm, 30 * mm, 25 * mm, 25 * mm, 32 * mm],
+    ))
+
     # RECOMMANDATIONS
-    add_section(story, "8. Synthèse et recommandations", styles)
+    add_section(story, "10. Synthèse et recommandations", styles)
     recommendations = [
         "Prioriser le traitement des risques classés Critiques et Élevés.",
         "Définir et valider les objectifs de reprise RTO et RPO pour chaque processus critique.",
@@ -571,7 +661,7 @@ def download_smca_report(
     for recommendation in recommendations:
         story.append(Paragraph(f"• {safe(recommendation)}", styles["Body"]))
 
-    add_section(story, "9. Conclusion", styles)
+    add_section(story, "11. Conclusion", styles)
     story.append(Paragraph(
         "RiskMap-SMCA centralise les informations relatives aux processus métier, "
         "aux actifs, aux analyses d'impact et aux risques. Ce rapport fournit une "
