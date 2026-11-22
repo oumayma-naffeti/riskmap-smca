@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..audit import describe_changes, log_action
 from ..database import get_db
 from ..deps import get_current_user, require_role
 from ..models import Risk, Treatment
@@ -59,12 +60,16 @@ def create_treatment(
     risk_id: int,
     data: TreatmentCreate,
     db: Session = Depends(get_db),
+    user=Depends(get_current_user),
 ):
-    get_risk(db, risk_id)
+    risk = get_risk(db, risk_id)
     validate_residual(data.residual_probability, data.residual_impact)
 
     treatment = Treatment(risk_id=risk_id, **data.model_dump())
     db.add(treatment)
+    db.flush()
+    log_action(db, user, "création", "traitement", treatment.id,
+               f"{treatment.strategy} sur {risk.code or 'risque #' + str(risk.id)}")
     db.commit()
     db.refresh(treatment)
     return treatment
@@ -79,6 +84,7 @@ def update_treatment(
     treatment_id: int,
     data: TreatmentUpdate,
     db: Session = Depends(get_db),
+    user=Depends(get_current_user),
 ):
     treatment = get_treatment(db, treatment_id)
     changes = data.model_dump(exclude_unset=True)
@@ -89,9 +95,14 @@ def update_treatment(
     impact = changes.get("residual_impact", treatment.residual_impact)
     validate_residual(probability, impact)
 
+    details = describe_changes(treatment, changes)
+    if details == "aucun changement":
+        return treatment
+
     for key, value in changes.items():
         setattr(treatment, key, value)
 
+    log_action(db, user, "modification", "traitement", treatment.id, details)
     db.commit()
     db.refresh(treatment)
     return treatment
@@ -102,7 +113,10 @@ def update_treatment(
     status_code=204,
     dependencies=[Depends(require_role("admin"))],
 )
-def delete_treatment(treatment_id: int, db: Session = Depends(get_db)):
+def delete_treatment(treatment_id: int, db: Session = Depends(get_db),
+                     user=Depends(get_current_user)):
     treatment = get_treatment(db, treatment_id)
+    log_action(db, user, "suppression", "traitement", treatment.id,
+               f"{treatment.strategy} : {treatment.action[:60]}")
     db.delete(treatment)
     db.commit()
