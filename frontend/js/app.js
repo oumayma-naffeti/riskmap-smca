@@ -27,7 +27,7 @@ const RISK_CATEGORIES = [
     "Fournisseur / tiers", "Juridique / conformité", "Naturel / environnemental"
 ];
 
-const RISK_CLOSED_STATUSES = [];
+const RISK_CLOSED_STATUSES = ["clôturé"];
 
 function reviewCell(risk) {
     if (!risk.review_date) return "—";
