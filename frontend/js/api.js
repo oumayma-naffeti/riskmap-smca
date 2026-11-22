@@ -33,7 +33,11 @@ const API = {
             let message = `Erreur HTTP ${response.status}`;
             try {
                 const data = await response.json();
-                message = data.detail || message;
+                if (Array.isArray(data.detail)) {
+                    message = data.detail.map(e => `${(e.loc || []).slice(1).join(".")} : ${e.msg}`).join(" ; ");
+                } else {
+                    message = data.detail || message;
+                }
             } catch (_) {}
             throw new Error(message);
         }

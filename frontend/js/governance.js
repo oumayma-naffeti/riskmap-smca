@@ -6,7 +6,7 @@ const GOV_COLORS = {
 };
 
 function govDate(value) {
-    return value ? new Date(value).toLocaleString("fr-FR") : "";
+    return value ? new Date(String(value).endsWith("Z") ? value : value + "Z").toLocaleString("fr-FR") : "";
 }
 
 function govField(id, label, value, opts = {}) {

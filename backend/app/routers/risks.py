@@ -2,6 +2,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..audit import describe_changes, log_action
@@ -52,6 +53,18 @@ def _get(db: Session, risk_id: int) -> Risk:
         raise HTTPException(404, "Risque introuvable")
 
     return risk
+
+
+def _next_code(db: Session) -> str:
+    """Prochain code libre : RSK-018 si le plus grand code existant est RSK-017."""
+    codes = db.scalars(select(Risk.code).where(Risk.code.like("RSK-%"))).all()
+    numbers = [int(code[4:]) for code in codes if code[4:].isdigit()]
+    return f"RSK-{max(numbers, default=0) + 1:03d}"
+
+
+def _check_code_free(db: Session, code: str) -> None:
+    if db.scalar(select(Risk.id).where(Risk.code == code)) is not None:
+        raise HTTPException(409, f"Le code {code} est déjà utilisé")
 
 
 def _check_asset(db: Session, asset_id: int | None) -> None:
@@ -172,6 +185,11 @@ def create_risk(
 
     risk_data = data.model_dump()
 
+    if risk_data.get("code"):
+        _check_code_free(db, risk_data["code"])
+    else:
+        risk_data["code"] = _next_code(db)
+
     risk = Risk(
         **risk_data,
         score=compute_score(
@@ -181,7 +199,11 @@ def create_risk(
     )
 
     db.add(risk)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "Ce code de risque vient d'être pris : réessayez")
 
     log_action(
         db,
@@ -221,10 +243,18 @@ def update_risk(
         if value is not None or key in NULLABLE_RISK_FIELDS
     }
 
+    if "code" in changes:
+        if not changes["code"]:
+            changes.pop("code")  # un risque garde toujours son code
+        elif changes["code"] != risk.code:
+            _check_code_free(db, changes["code"])
+
     if "asset_id" in changes:
         _check_asset(db, changes["asset_id"])
 
     details = describe_changes(risk, changes)
+    if details == "aucun changement":
+        return RiskOut.model_validate(risk)
 
     for key, value in changes.items():
         setattr(risk, key, value)

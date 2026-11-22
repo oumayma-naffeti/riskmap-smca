@@ -1749,7 +1749,7 @@ async function renderAudit() {
             </tr></thead>
             <tbody>
             ${logs.map(l => `<tr>
-                <td>${escapeHTML(new Date(l.created_at).toLocaleString("fr-FR"))}</td>
+                <td>${escapeHTML(new Date(l.created_at.endsWith("Z") ? l.created_at : l.created_at + "Z").toLocaleString("fr-FR"))}</td>
                 <td>${escapeHTML(l.username)}</td>
                 <td>${escapeHTML(l.action)}</td>
                 <td>${escapeHTML(l.entity_type)}${l.entity_id ? " #" + l.entity_id : ""}</td>

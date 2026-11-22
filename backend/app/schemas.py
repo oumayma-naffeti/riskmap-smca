@@ -108,7 +108,7 @@ class RiskCreate(BaseModel):
     asset_id: int | None = None
 
     # Identification
-    code: str | None = Field(default=None, max_length=20)
+    code: str | None = Field(default=None, max_length=20, pattern=r"^RSK-\d{3,6}$")
     name: str | None = Field(default=None, max_length=200)
     category: str | None = Field(default=None, max_length=50)
 
@@ -134,7 +134,7 @@ class RiskUpdate(BaseModel):
     asset_id: int | None = None
 
     # Identification
-    code: str | None = Field(default=None, max_length=20)
+    code: str | None = Field(default=None, max_length=20, pattern=r"^RSK-\d{3,6}$")
     name: str | None = Field(default=None, max_length=200)
     category: str | None = Field(default=None, max_length=50)
 
