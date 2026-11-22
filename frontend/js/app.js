@@ -17,6 +17,7 @@ const titles = {
     matrix: "Matrice des risques",
     treatments: "Traitement des risques",
     controls: "Contrôles des risques",
+    kris: "Indicateurs clés de risque (KRI)",
     bia: "Analyse d’impact métier (BIA)",
     audit: "Journal d'audit",
     governance: "Gouvernance SMCA"
@@ -1412,6 +1413,8 @@ async function renderAlerts() {
         const treatmentLists = await Promise.all(
             risks.map(r => API.treatments(r.id).catch(() => []))
         );
+        const kriAlerts = (await API.kris()).filter(k => k.state === "alerte").length;
+
         const lateTreatments = treatmentLists.flat().filter(t =>
             isLate(t.due_date) && t.status !== "terminé"
         ).length;
@@ -1419,7 +1422,8 @@ async function renderAlerts() {
         const rows = [
             ["risks", "Revues de risque en retard", lateReviews],
             ["controls", "Tests de contrôle en retard", lateControls],
-            ["treatments", "Traitements en retard", lateTreatments]
+            ["treatments", "Traitements en retard", lateTreatments],
+            ["kris", "KRI en alerte", kriAlerts]
         ];
 
         box.innerHTML = rows.map(([section, label, count]) => `
@@ -1662,6 +1666,252 @@ async function renderControls() {
     });
 }
 
+async function renderKRIs() {
+    const canWrite = ["admin", "analyste"].includes(currentUser?.role);
+    const canDelete = currentUser?.role === "admin";
+    const box = $("kris-content");
+
+    let kris;
+    try {
+        kris = await API.kris();
+    } catch (error) {
+        showMessage("Erreur de chargement des KRI : " + error.message);
+        return;
+    }
+
+    const riskLabel = id => {
+        const r = appData.risks.find(x => x.id === id);
+        return r ? `${r.code || "#" + r.id} — ${r.threat}` : `#${id}`;
+    };
+
+    const stateCell = k => {
+        if (k.state === "alerte") return '<span style="color:#b91c1c;font-weight:600">⚠ Alerte</span>';
+        if (k.state === "normal") return '<span style="color:#15803d;font-weight:600">✓ Normal</span>';
+        return "Sans mesure";
+    };
+
+    const fmt = (v, unit) => v == null ? "—" : `${v} ${unit || ""}`.trim();
+    const todayIso = new Date().toISOString().slice(0, 10);
+
+    box.innerHTML = `
+    ${canWrite ? `
+    <div class="process-form-card">
+        <h3 id="kri-form-title">Ajouter un KRI</h3>
+        <form id="kri-form">
+            <input type="hidden" id="kri-id">
+            <div class="form-grid">
+                <div>
+                    <label for="kri-risk">Risque surveillé *</label>
+                    <select id="kri-risk" required>
+                        <option value="">Choisir un risque</option>
+                        ${appData.risks.map(r => `<option value="${r.id}">${escapeHTML(riskLabel(r.id))}</option>`).join("")}
+                    </select>
+                </div>
+                <div>
+                    <label for="kri-name">Nom de l'indicateur *</label>
+                    <input id="kri-name" type="text" minlength="3" maxlength="200" required>
+                </div>
+                <div>
+                    <label for="kri-unit">Unité</label>
+                    <input id="kri-unit" type="text" maxlength="20" placeholder="%, h, nombre...">
+                </div>
+                <div>
+                    <label for="kri-threshold">Seuil d'alerte *</label>
+                    <input id="kri-threshold" type="number" step="any" required>
+                </div>
+                <div>
+                    <label for="kri-when">Alerte si la valeur est *</label>
+                    <select id="kri-when" required>
+                        <option value="en dessous">En dessous du seuil</option>
+                        <option value="au-dessus">Au-dessus du seuil</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="kri-owner">Responsable</label>
+                    <input id="kri-owner" type="text" maxlength="80">
+                </div>
+                <div>
+                    <label for="kri-description">Description</label>
+                    <textarea id="kri-description" rows="2"></textarea>
+                </div>
+            </div>
+            <button type="submit" class="action-button" id="kri-submit">Enregistrer le KRI</button>
+            <button type="button" class="action-button" id="kri-cancel">Annuler</button>
+        </form>
+    </div>
+
+    <div class="process-form-card" id="measure-card" style="display:none">
+        <h3 id="measure-title">Nouvelle mesure</h3>
+        <form id="measure-form">
+            <input type="hidden" id="measure-kri">
+            <div class="form-grid">
+                <div>
+                    <label for="measure-value">Valeur *</label>
+                    <input id="measure-value" type="number" step="any" required>
+                </div>
+                <div>
+                    <label for="measure-date">Date de mesure</label>
+                    <input id="measure-date" type="date" max="${todayIso}">
+                </div>
+                <div>
+                    <label for="measure-comment">Commentaire</label>
+                    <input id="measure-comment" type="text" maxlength="300">
+                </div>
+            </div>
+            <button type="submit" class="action-button">Enregistrer la mesure</button>
+            <button type="button" class="action-button" id="measure-cancel">Annuler</button>
+        </form>
+    </div>` : ""}
+
+    <div class="process-form-card">
+        <h3>Registre des KRI</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Risque</th>
+                    <th>Indicateur</th>
+                    <th>Seuil</th>
+                    <th>Dernière mesure</th>
+                    <th>Date</th>
+                    <th>État</th>
+                    <th>Responsable</th>
+                    ${canWrite ? "<th>Actions</th>" : ""}
+                </tr>
+            </thead>
+            <tbody>
+                ${kris.map(k => `
+                <tr>
+                    <td>${escapeHTML(riskLabel(k.risk_id))}</td>
+                    <td>${escapeHTML(k.name)}</td>
+                    <td>${escapeHTML(k.alert_when)} ${escapeHTML(fmt(k.threshold, k.unit))}</td>
+                    <td>${escapeHTML(fmt(k.last_value, k.unit))}</td>
+                    <td>${k.last_measured_at ? new Date(k.last_measured_at + "T00:00:00").toLocaleDateString("fr-FR") : "—"}</td>
+                    <td>${stateCell(k)}</td>
+                    <td>${escapeHTML(k.owner || "—")}</td>
+                    ${canWrite ? `
+                    <td class="process-actions">
+                        <button class="action-button" data-measure-kri="${k.id}">Mesure</button>
+                        <button class="action-button" data-edit-kri="${k.id}">Modifier</button>
+                        ${canDelete ? `<button class="action-button danger-button" data-delete-kri="${k.id}">Supprimer</button>` : ""}
+                    </td>` : ""}
+                </tr>`).join("") || `
+                <tr><td colspan="${canWrite ? 8 : 7}">Aucun KRI enregistré</td></tr>`}
+            </tbody>
+        </table>
+    </div>`;
+
+    if (!canWrite) return;
+
+    const form = $("kri-form");
+
+    function resetKRIForm() {
+        form.reset();
+        $("kri-id").value = "";
+        $("kri-risk").disabled = false;
+        $("kri-form-title").textContent = "Ajouter un KRI";
+        $("kri-submit").textContent = "Enregistrer le KRI";
+    }
+
+    $("kri-cancel").addEventListener("click", resetKRIForm);
+
+    form.addEventListener("submit", async event => {
+        event.preventDefault();
+        hideMessage();
+
+        const id = $("kri-id").value;
+        const data = {
+            name: $("kri-name").value.trim(),
+            unit: $("kri-unit").value.trim() || null,
+            threshold: Number($("kri-threshold").value),
+            alert_when: $("kri-when").value,
+            owner: $("kri-owner").value.trim() || null,
+            description: $("kri-description").value.trim() || null
+        };
+
+        try {
+            if (id) {
+                await API.updateKRI(id, data);
+            } else {
+                const riskId = $("kri-risk").value;
+                if (!riskId) {
+                    showMessage("Veuillez sélectionner un risque.");
+                    return;
+                }
+                await API.createKRI(riskId, data);
+            }
+            await renderKRIs();
+            renderAlerts();
+        } catch (error) {
+            showMessage(error.message);
+        }
+    });
+
+    box.querySelectorAll("[data-edit-kri]").forEach(button => {
+        button.addEventListener("click", () => {
+            const k = kris.find(x => x.id === Number(button.dataset.editKri));
+            if (!k) return;
+            $("kri-id").value = k.id;
+            $("kri-risk").value = k.risk_id;
+            $("kri-risk").disabled = true;
+            $("kri-name").value = k.name;
+            $("kri-unit").value = k.unit || "";
+            $("kri-threshold").value = k.threshold;
+            $("kri-when").value = k.alert_when;
+            $("kri-owner").value = k.owner || "";
+            $("kri-description").value = k.description || "";
+            $("kri-form-title").textContent = "Modifier le KRI";
+            $("kri-submit").textContent = "Mettre à jour le KRI";
+            form.scrollIntoView({ behavior: "smooth" });
+        });
+    });
+
+    box.querySelectorAll("[data-measure-kri]").forEach(button => {
+        button.addEventListener("click", () => {
+            const k = kris.find(x => x.id === Number(button.dataset.measureKri));
+            if (!k) return;
+            $("measure-kri").value = k.id;
+            $("measure-title").textContent = `Nouvelle mesure : ${k.name}`;
+            $("measure-card").style.display = "";
+            $("measure-value").focus();
+            $("measure-card").scrollIntoView({ behavior: "smooth" });
+        });
+    });
+
+    $("measure-cancel").addEventListener("click", () => {
+        $("measure-form").reset();
+        $("measure-card").style.display = "none";
+    });
+
+    $("measure-form").addEventListener("submit", async event => {
+        event.preventDefault();
+        hideMessage();
+        try {
+            await API.addKRIMeasure($("measure-kri").value, {
+                value: Number($("measure-value").value),
+                measured_at: $("measure-date").value || null,
+                comment: $("measure-comment").value.trim() || null
+            });
+            await renderKRIs();
+            renderAlerts();
+        } catch (error) {
+            showMessage(error.message);
+        }
+    });
+
+    box.querySelectorAll("[data-delete-kri]").forEach(button => {
+        button.addEventListener("click", async () => {
+            if (!confirm("Supprimer ce KRI et toutes ses mesures ?")) return;
+            try {
+                await API.deleteKRI(button.dataset.deleteKri);
+                await renderKRIs();
+                renderAlerts();
+            } catch (error) {
+                showMessage(error.message);
+            }
+        });
+    });
+}
+
 async function navigate(section) {
     if (!titles[section]) return;
 
@@ -1687,6 +1937,7 @@ async function navigate(section) {
         if (section === "matrix") await renderMatrix();
         if (section === "treatments") await renderTreatments();
         if (section === "controls") await renderControls();
+        if (section === "kris") await renderKRIs();
         if (section === "bia") await renderBIA();
         if (section === "audit") await renderAudit();
         if (section === "governance") await renderGovernance();

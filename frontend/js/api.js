@@ -227,6 +227,40 @@ const API = {
         });
     },
 
+    kris() {
+        return this.request("/api/kris");
+    },
+
+    createKRI(riskId, data) {
+        return this.request(`/api/risks/${riskId}/kris`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data)
+        });
+    },
+
+    updateKRI(id, data) {
+        return this.request(`/api/kris/${id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data)
+        });
+    },
+
+    deleteKRI(id) {
+        return this.request(`/api/kris/${id}`, {
+            method: "DELETE"
+        });
+    },
+
+    addKRIMeasure(id, data) {
+        return this.request(`/api/kris/${id}/measures`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data)
+        });
+    },
+
     auditLogs(limit = 100) {
         return this.request(`/api/audit-logs?limit=${limit}`);
     },
