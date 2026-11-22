@@ -153,6 +153,17 @@ function renderDashboard() {
     $("stat-critical").textContent =
         risks.filter(r => r.level === "Critique").length;
 
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const overdue = risks.filter(r =>
+        r.review_date &&
+        !RISK_CLOSED_STATUSES.includes(r.status) &&
+        new Date(r.review_date + "T00:00:00") < today
+    ).length;
+    $("stat-overdue").textContent = overdue;
+    $("stat-overdue").style.color = overdue > 0 ? "#b91c1c" : "";
+    $("stat-overdue-card").onclick = () => navigate("risks");
+
     const levels = ["Faible", "Moyen", "Élevé", "Critique"];
     $("risk-distribution").innerHTML = levels.map(level => {
         const count = risks.filter(r => r.level === level).length;
