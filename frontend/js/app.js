@@ -16,6 +16,7 @@ const titles = {
     risks: "Cartographie des risques",
     matrix: "Matrice des risques",
     treatments: "Traitement des risques",
+    controls: "Contrôles des risques",
     bia: "Analyse d’impact métier (BIA)",
     audit: "Journal d'audit",
     governance: "Gouvernance SMCA"
@@ -1415,6 +1416,205 @@ async function loadDashboard() {
     }
 }
 
+const CONTROL_TYPES = [["préventif", "Préventif"], ["détectif", "Détectif"], ["correctif", "Correctif"]];
+const CONTROL_EFFECTIVENESS = [["non évaluée", "Non évaluée"], ["faible", "Faible"], ["moyenne", "Moyenne"], ["élevée", "Élevée"]];
+
+async function renderControls() {
+    const canWrite = ["admin", "analyste"].includes(currentUser?.role);
+    const canDelete = currentUser?.role === "admin";
+    const box = $("controls-content");
+
+    let controls;
+    try {
+        controls = await API.controls();
+    } catch (error) {
+        showMessage("Erreur de chargement des contrôles : " + error.message);
+        return;
+    }
+
+    const riskLabel = id => {
+        const r = appData.risks.find(x => x.id === id);
+        return r ? `${r.code || "#" + r.id} — ${r.threat}` : `#${id}`;
+    };
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const nextTestCell = c => {
+        if (!c.next_test_date) return "—";
+        const due = new Date(c.next_test_date + "T00:00:00");
+        const label = due.toLocaleDateString("fr-FR");
+        if (due >= today) return label;
+        const days = Math.round((today - due) / 86400000);
+        return `<span style="color:#b91c1c;font-weight:600">${label} · en retard de ${days} j</span>`;
+    };
+
+    const dateLabel = v => v ? new Date(v + "T00:00:00").toLocaleDateString("fr-FR") : "—";
+    const options = list => list.map(([v, l]) => `<option value="${escapeHTML(v)}">${escapeHTML(l)}</option>`).join("");
+
+    box.innerHTML = `
+    ${canWrite ? `
+    <div class="process-form-card">
+        <h3 id="control-form-title">Ajouter un contrôle</h3>
+        <form id="control-form">
+            <input type="hidden" id="control-id">
+            <div class="form-grid">
+                <div>
+                    <label for="control-risk">Risque concerné *</label>
+                    <select id="control-risk" required>
+                        <option value="">Choisir un risque</option>
+                        ${appData.risks.map(r => `<option value="${r.id}">${escapeHTML(riskLabel(r.id))}</option>`).join("")}
+                    </select>
+                </div>
+                <div>
+                    <label for="control-name">Nom du contrôle *</label>
+                    <input id="control-name" type="text" minlength="3" maxlength="200" required>
+                </div>
+                <div>
+                    <label for="control-type">Type *</label>
+                    <select id="control-type" required>${options(CONTROL_TYPES)}</select>
+                </div>
+                <div>
+                    <label for="control-effectiveness">Efficacité</label>
+                    <select id="control-effectiveness">${options(CONTROL_EFFECTIVENESS)}</select>
+                </div>
+                <div>
+                    <label for="control-owner">Responsable</label>
+                    <input id="control-owner" type="text" maxlength="80">
+                </div>
+                <div>
+                    <label for="control-last">Dernier test</label>
+                    <input id="control-last" type="date">
+                </div>
+                <div>
+                    <label for="control-next">Prochain test</label>
+                    <input id="control-next" type="date">
+                </div>
+                <div>
+                    <label for="control-description">Description</label>
+                    <textarea id="control-description" rows="2"></textarea>
+                </div>
+            </div>
+            <button type="submit" class="action-button" id="control-submit">Enregistrer le contrôle</button>
+            <button type="button" class="action-button" id="control-cancel">Annuler</button>
+        </form>
+    </div>` : ""}
+
+    <div class="process-form-card">
+        <h3>Registre des contrôles</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Risque</th>
+                    <th>Contrôle</th>
+                    <th>Type</th>
+                    <th>Efficacité</th>
+                    <th>Responsable</th>
+                    <th>Dernier test</th>
+                    <th>Prochain test</th>
+                    ${canWrite ? "<th>Actions</th>" : ""}
+                </tr>
+            </thead>
+            <tbody>
+                ${controls.map(c => `
+                <tr>
+                    <td>${escapeHTML(riskLabel(c.risk_id))}</td>
+                    <td>${escapeHTML(c.name)}</td>
+                    <td>${escapeHTML(c.control_type)}</td>
+                    <td>${escapeHTML(c.effectiveness)}</td>
+                    <td>${escapeHTML(c.owner || "—")}</td>
+                    <td>${dateLabel(c.last_test_date)}</td>
+                    <td>${nextTestCell(c)}</td>
+                    ${canWrite ? `
+                    <td class="process-actions">
+                        <button class="action-button" data-edit-control="${c.id}">Modifier</button>
+                        ${canDelete ? `<button class="action-button danger-button" data-delete-control="${c.id}">Supprimer</button>` : ""}
+                    </td>` : ""}
+                </tr>`).join("") || `
+                <tr><td colspan="${canWrite ? 8 : 7}">Aucun contrôle enregistré</td></tr>`}
+            </tbody>
+        </table>
+    </div>`;
+
+    if (!canWrite) return;
+
+    const form = $("control-form");
+
+    function resetControlForm() {
+        form.reset();
+        $("control-id").value = "";
+        $("control-risk").disabled = false;
+        $("control-form-title").textContent = "Ajouter un contrôle";
+        $("control-submit").textContent = "Enregistrer le contrôle";
+    }
+
+    $("control-cancel").addEventListener("click", resetControlForm);
+
+    form.addEventListener("submit", async event => {
+        event.preventDefault();
+        hideMessage();
+
+        const id = $("control-id").value;
+        const data = {
+            name: $("control-name").value.trim(),
+            control_type: $("control-type").value,
+            effectiveness: $("control-effectiveness").value,
+            owner: $("control-owner").value.trim() || null,
+            description: $("control-description").value.trim() || null,
+            last_test_date: $("control-last").value || null,
+            next_test_date: $("control-next").value || null
+        };
+
+        try {
+            if (id) {
+                await API.updateControl(id, data);
+            } else {
+                const riskId = $("control-risk").value;
+                if (!riskId) {
+                    showMessage("Veuillez sélectionner un risque.");
+                    return;
+                }
+                await API.createControl(riskId, data);
+            }
+            await renderControls();
+        } catch (error) {
+            showMessage(error.message);
+        }
+    });
+
+    box.querySelectorAll("[data-edit-control]").forEach(button => {
+        button.addEventListener("click", () => {
+            const c = controls.find(x => x.id === Number(button.dataset.editControl));
+            if (!c) return;
+            $("control-id").value = c.id;
+            $("control-risk").value = c.risk_id;
+            $("control-risk").disabled = true;
+            $("control-name").value = c.name;
+            $("control-type").value = c.control_type;
+            $("control-effectiveness").value = c.effectiveness;
+            $("control-owner").value = c.owner || "";
+            $("control-last").value = c.last_test_date || "";
+            $("control-next").value = c.next_test_date || "";
+            $("control-description").value = c.description || "";
+            $("control-form-title").textContent = "Modifier le contrôle";
+            $("control-submit").textContent = "Mettre à jour le contrôle";
+            form.scrollIntoView({ behavior: "smooth" });
+        });
+    });
+
+    box.querySelectorAll("[data-delete-control]").forEach(button => {
+        button.addEventListener("click", async () => {
+            if (!confirm("Supprimer ce contrôle ?")) return;
+            try {
+                await API.deleteControl(button.dataset.deleteControl);
+                await renderControls();
+            } catch (error) {
+                showMessage(error.message);
+            }
+        });
+    });
+}
+
 async function navigate(section) {
     if (!titles[section]) return;
 
@@ -1439,6 +1639,7 @@ async function navigate(section) {
     try {
         if (section === "matrix") await renderMatrix();
         if (section === "treatments") await renderTreatments();
+        if (section === "controls") await renderControls();
         if (section === "bia") await renderBIA();
         if (section === "audit") await renderAudit();
         if (section === "governance") await renderGovernance();

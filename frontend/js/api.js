@@ -201,6 +201,32 @@ const API = {
         });
     },
 
+    controls() {
+        return this.request("/api/controls");
+    },
+
+    createControl(riskId, data) {
+        return this.request(`/api/risks/${riskId}/controls`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data)
+        });
+    },
+
+    updateControl(id, data) {
+        return this.request(`/api/controls/${id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data)
+        });
+    },
+
+    deleteControl(id) {
+        return this.request(`/api/controls/${id}`, {
+            method: "DELETE"
+        });
+    },
+
     auditLogs(limit = 100) {
         return this.request(`/api/audit-logs?limit=${limit}`);
     },
