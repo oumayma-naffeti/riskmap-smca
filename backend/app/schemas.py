@@ -8,6 +8,10 @@ from .scoring import risk_level
 Role = Literal["admin", "analyste", "lecteur"]
 AssetType = Literal["serveur", "application", "local", "personnel", "fournisseur"]
 Scale5 = Annotated[int, Field(ge=1, le=5)]
+RiskCategory = Literal[
+    "Cyber / informatique", "Infrastructure et énergie", "Humain", "Organisationnel",
+    "Fournisseur / tiers", "Juridique / conformité", "Naturel / environnemental",
+]
 
 USERNAME = Field(min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_.-]+$")
 # max 72 : limite technique de bcrypt
@@ -110,7 +114,7 @@ class RiskCreate(BaseModel):
     # Identification
     code: str | None = Field(default=None, max_length=20, pattern=r"^RSK-\d{3,6}$")
     name: str | None = Field(default=None, max_length=200)
-    category: str | None = Field(default=None, max_length=50)
+    category: RiskCategory | None = None
 
     # Description
     threat: str = Field(min_length=3, max_length=200)
@@ -136,7 +140,7 @@ class RiskUpdate(BaseModel):
     # Identification
     code: str | None = Field(default=None, max_length=20, pattern=r"^RSK-\d{3,6}$")
     name: str | None = Field(default=None, max_length=200)
-    category: str | None = Field(default=None, max_length=50)
+    category: RiskCategory | None = None
 
     # Description
     threat: str | None = Field(default=None, min_length=3, max_length=200)

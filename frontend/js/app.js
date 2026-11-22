@@ -21,6 +21,24 @@ const titles = {
     governance: "Gouvernance SMCA"
 };
 
+const RISK_CATEGORIES = [
+    "Cyber / informatique", "Infrastructure et énergie", "Humain", "Organisationnel",
+    "Fournisseur / tiers", "Juridique / conformité", "Naturel / environnemental"
+];
+
+const RISK_CLOSED_STATUSES = [];
+
+function reviewCell(risk) {
+    if (!risk.review_date) return "—";
+    const due = new Date(risk.review_date + "T00:00:00");
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const label = due.toLocaleDateString("fr-FR");
+    if (RISK_CLOSED_STATUSES.includes(risk.status) || due >= today) return label;
+    const days = Math.round((today - due) / 86400000);
+    return `<span style="color:#b91c1c;font-weight:600">${label} · en retard de ${days} j</span>`;
+}
+
 function escapeHTML(value) {
     return String(value ?? "").replace(/[&<>"']/g, char => ({
         "&": "&amp;", "<": "&lt;", ">": "&gt;",
@@ -614,7 +632,7 @@ function renderRisks() {
                 <div class="form-field">
                     <label for="risk-code">Code du risque</label>
                     <input id="risk-code" type="text"
-                           maxlength="20" placeholder="Ex : R-001">
+                           maxlength="20" placeholder="Automatique si vide (ex : RSK-018)">
                 </div>
 
                 <div class="form-field">
@@ -625,8 +643,10 @@ function renderRisks() {
 
                 <div class="form-field">
                     <label for="risk-category">Catégorie</label>
-                    <input id="risk-category" type="text"
-                           maxlength="50" placeholder="Ex : Informatique">
+                    <select id="risk-category">
+                        <option value="">Non classé</option>
+                        ${RISK_CATEGORIES.map(c => `<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`).join("")}
+                    </select>
                 </div>
 
                 <div class="form-field">
@@ -752,6 +772,7 @@ function renderRisks() {
                 <th>Score</th>
                 <th>Niveau</th>
                 <th>Statut</th>
+                <th>Revue</th>
                 ${canWrite ? "<th>Actions</th>" : ""}
             </tr>
           </thead>
@@ -772,6 +793,7 @@ function renderRisks() {
                 <td><strong>${r.score}/25</strong></td>
                 <td>${levelBadge(r.level)}</td>
                 <td>${escapeHTML(r.status || "—")}</td>
+                <td>${reviewCell(r)}</td>
                 ${canWrite ? `
                 <td class="process-actions">
                     <button class="action-button"
@@ -783,7 +805,7 @@ function renderRisks() {
             </tr>
           `).join("") || `
             <tr>
-                <td colspan="${canWrite ? 14 : 13}">
+                <td colspan="${canWrite ? 15 : 14}">
                     Aucun risque enregistré
                 </td>
             </tr>
