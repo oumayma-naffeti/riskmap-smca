@@ -2,7 +2,7 @@ from fastapi import Depends, FastAPI
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from . import models, governance_models, control_models
+from . import models, governance_models, control_models, kri_models
 from .database import Base, engine, get_db
 from .routers import (
     assets,
@@ -16,6 +16,7 @@ from .routers import (
     users,
     governance,
     controls,
+    kris,
 )
 
 app = FastAPI(
@@ -38,6 +39,7 @@ app.include_router(audit.router)
 # Nouveau routeur : gouvernance SMCA
 app.include_router(governance.router)
 app.include_router(controls.router)
+app.include_router(kris.router)
 
 
 @app.on_event("startup")
