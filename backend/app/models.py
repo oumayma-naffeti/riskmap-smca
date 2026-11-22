@@ -86,16 +86,43 @@ class Risk(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     process_id: Mapped[int] = mapped_column(ForeignKey("processes.id", ondelete="CASCADE"))
     asset_id: Mapped[int | None] = mapped_column(ForeignKey("assets.id", ondelete="SET NULL"))
-    threat: Mapped[str] = mapped_column(String(200))         # ex : panne électrique prolongée
-    vulnerability: Mapped[str] = mapped_column(String(200))  # ex : pas d'onduleur
-    probability: Mapped[int] = mapped_column(Integer)        # 1 à 5
-    impact: Mapped[int] = mapped_column(Integer)             # 1 à 5
-    score: Mapped[int] = mapped_column(Integer)              # probability x impact
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    # Informations existantes
+    threat: Mapped[str] = mapped_column(String(200))
+    vulnerability: Mapped[str] = mapped_column(String(200))
+    probability: Mapped[int] = mapped_column(Integer)
+    impact: Mapped[int] = mapped_column(Integer)
+    score: Mapped[int] = mapped_column(Integer)
+
+    # Nouveaux champs
+    code: Mapped[str | None] = mapped_column(String(20), unique=True, index=True)
+    name: Mapped[str | None] = mapped_column(String(200))
+    category: Mapped[str | None] = mapped_column(String(50))
+    causes: Mapped[str | None] = mapped_column(Text)
+    consequence: Mapped[str | None] = mapped_column(Text)
+    source: Mapped[str | None] = mapped_column(String(100))
+    existing_measures: Mapped[str | None] = mapped_column(Text)
+    owner: Mapped[str | None] = mapped_column(String(80))
+    review_date: Mapped[date | None] = mapped_column(Date)
+
+    status: Mapped[str] = mapped_column(
+        String(20),
+        default="ouvert",
+        server_default="ouvert"
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=func.now()
+    )
 
     process = relationship("Process", back_populates="risks")
     asset = relationship("Asset", back_populates="risks")
-    treatments = relationship("Treatment", back_populates="risk", cascade="all, delete-orphan")
+    treatments = relationship(
+        "Treatment",
+        back_populates="risk",
+        cascade="all, delete-orphan"
+    )
 
 
 class Treatment(Base):

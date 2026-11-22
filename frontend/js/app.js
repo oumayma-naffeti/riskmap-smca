@@ -17,7 +17,8 @@ const titles = {
     matrix: "Matrice des risques",
     treatments: "Traitement des risques",
     bia: "Analyse d’impact métier (BIA)",
-    audit: "Journal d'audit"
+    audit: "Journal d'audit",
+    governance: "Gouvernance SMCA"
 };
 
 function escapeHTML(value) {
@@ -305,8 +306,10 @@ function renderProcesses() {
             criticality: Number($("process-criticality").value),
             mtpd_hours: mtpd,
             rto_hours: rto,
+	    impact: Number(impact.value),
             rpo_minutes: rpoValue === "" ? null : Number(rpoValue)
         };
+       	console.log("DONNEES ENVOYEES A L'API :", JSON.stringify(data, null, 2));
 
         const id = $("process-id").value;
 
@@ -558,6 +561,7 @@ function renderAssets() {
     };
 }
 
+
 function renderRisks() {
     const canWrite = ["admin", "analyste"].includes(currentUser?.role);
     const processes = appData.processes || [];
@@ -570,6 +574,13 @@ function renderRisks() {
         return "Critique";
     };
 
+    const statuses = [
+        "brouillon",
+        "ouvert",
+        "en traitement",
+        "clôturé"
+    ];
+
     $("risks-content").innerHTML = `
     ${canWrite ? `
     <div class="process-form-card">
@@ -579,6 +590,7 @@ function renderRisks() {
             <input type="hidden" id="risk-id">
 
             <div class="process-form-grid">
+
                 <div class="form-field">
                     <label for="risk-process">Processus métier *</label>
                     <select id="risk-process" required>
@@ -599,18 +611,83 @@ function renderRisks() {
                     </select>
                 </div>
 
+                <div class="form-field">
+                    <label for="risk-code">Code du risque</label>
+                    <input id="risk-code" type="text"
+                           maxlength="20" placeholder="Ex : R-001">
+                </div>
+
+                <div class="form-field">
+                    <label for="risk-name">Nom du risque</label>
+                    <input id="risk-name" type="text"
+                           maxlength="200" placeholder="Nom du risque">
+                </div>
+
+                <div class="form-field">
+                    <label for="risk-category">Catégorie</label>
+                    <input id="risk-category" type="text"
+                           maxlength="50" placeholder="Ex : Informatique">
+                </div>
+
+                <div class="form-field">
+                    <label for="risk-source">Source du risque</label>
+                    <input id="risk-source" type="text"
+                           maxlength="100" placeholder="Ex : Audit interne">
+                </div>
+
                 <div class="form-field full-width">
                     <label for="risk-threat">Menace *</label>
-                    <input id="risk-threat" type="text" minlength="3"
-                           maxlength="200" required
+                    <input id="risk-threat" type="text"
+                           minlength="3" maxlength="200" required
                            placeholder="Ex : Ransomware">
                 </div>
 
                 <div class="form-field full-width">
                     <label for="risk-vulnerability">Vulnérabilité *</label>
-                    <textarea id="risk-vulnerability" minlength="3"
-                              maxlength="200" required rows="2"
+                    <textarea id="risk-vulnerability"
+                              minlength="3" maxlength="200"
+                              required rows="2"
                               placeholder="Ex : Sauvegardes non isolées"></textarea>
+                </div>
+
+                <div class="form-field full-width">
+                    <label for="risk-causes">Causes</label>
+                    <textarea id="risk-causes" rows="2"
+                              placeholder="Décrire les causes du risque"></textarea>
+                </div>
+
+                <div class="form-field full-width">
+                    <label for="risk-consequence">Conséquences</label>
+                    <textarea id="risk-consequence" rows="2"
+                              placeholder="Décrire les conséquences possibles"></textarea>
+                </div>
+
+                <div class="form-field full-width">
+                    <label for="risk-existing-measures">Mesures existantes</label>
+                    <textarea id="risk-existing-measures" rows="2"
+                              placeholder="Décrire les mesures de sécurité existantes"></textarea>
+                </div>
+
+                <div class="form-field">
+                    <label for="risk-owner">Responsable</label>
+                    <input id="risk-owner" type="text"
+                           maxlength="80" placeholder="Nom du responsable">
+                </div>
+
+                <div class="form-field">
+                    <label for="risk-review-date">Date de révision</label>
+                    <input id="risk-review-date" type="date">
+                </div>
+
+                <div class="form-field">
+                    <label for="risk-status">Statut</label>
+                    <select id="risk-status">
+                        ${statuses.map(s => `
+                            <option value="${s}" ${s === "ouvert" ? "selected" : ""}>
+                                ${s.charAt(0).toUpperCase() + s.slice(1)}
+                            </option>
+                        `).join("")}
+                    </select>
                 </div>
 
                 <div class="form-field">
@@ -634,18 +711,23 @@ function renderRisks() {
                         <option value="5">5 - Très élevé</option>
                     </select>
                 </div>
+
             </div>
 
             <div class="process-form-actions">
-                <strong>Score estimé : <span id="risk-score-preview">9/25 — Moyen</span></strong>
+                <strong>
+                    Score estimé :
+                    <span id="risk-score-preview">9/25 — Moyen</span>
+                </strong>
             </div>
 
             <div class="process-form-actions">
                 <button type="submit" class="primary-button" id="risk-submit">
                     Enregistrer le risque
                 </button>
-                <button type="button" class="secondary-button"
-                        id="risk-cancel">Annuler</button>
+                <button type="button" class="secondary-button" id="risk-cancel">
+                    Annuler
+                </button>
             </div>
         </form>
     </div>
@@ -653,37 +735,58 @@ function renderRisks() {
 
     <div class="process-form-card">
         <h3>Registre des risques</h3>
+
         <table>
-          <thead><tr>
-            <th>Menace</th>
-            <th>Vulnérabilité</th>
-            <th>Processus</th>
-            <th>Actif</th>
-            <th>Probabilité</th>
-            <th>Impact</th>
-            <th>Score</th>
-            <th>Niveau</th>
-            ${canWrite ? "<th>Actions</th>" : ""}
-          </tr></thead>
-          <tbody>
-          ${appData.risks.map(r => `
+          <thead>
             <tr>
-              <td>${escapeHTML(r.threat)}</td>
-              <td>${escapeHTML(r.vulnerability)}</td>
-              <td>${escapeHTML(processName(r.process_id))}</td>
-              <td>${escapeHTML(assetName(r.asset_id))}</td>
-              <td>${r.probability}/5</td>
-              <td>${r.impact}/5</td>
-              <td><strong>${r.score}/25</strong></td>
-              <td>${levelBadge(r.level)}</td>
-              ${canWrite ? `
-              <td class="process-actions">
-                <button class="action-button" data-edit-risk="${r.id}">Modifier</button>
-                <button class="action-button danger-button" data-delete-risk="${r.id}">Supprimer</button>
-              </td>` : ""}
+                <th>Code</th>
+                <th>Nom</th>
+                <th>Catégorie</th>
+                <th>Menace</th>
+                <th>Vulnérabilité</th>
+                <th>Processus</th>
+                <th>Actif</th>
+                <th>Responsable</th>
+                <th>Probabilité</th>
+                <th>Impact</th>
+                <th>Score</th>
+                <th>Niveau</th>
+                <th>Statut</th>
+                ${canWrite ? "<th>Actions</th>" : ""}
+            </tr>
+          </thead>
+
+          <tbody>
+          ${(appData.risks || []).map(r => `
+            <tr>
+                <td>${escapeHTML(r.code || "—")}</td>
+                <td>${escapeHTML(r.name || "—")}</td>
+                <td>${escapeHTML(r.category || "—")}</td>
+                <td>${escapeHTML(r.threat)}</td>
+                <td>${escapeHTML(r.vulnerability)}</td>
+                <td>${escapeHTML(processName(r.process_id))}</td>
+                <td>${escapeHTML(assetName(r.asset_id))}</td>
+                <td>${escapeHTML(r.owner || "—")}</td>
+                <td>${r.probability}/5</td>
+                <td>${r.impact}/5</td>
+                <td><strong>${r.score}/25</strong></td>
+                <td>${levelBadge(r.level)}</td>
+                <td>${escapeHTML(r.status || "—")}</td>
+                ${canWrite ? `
+                <td class="process-actions">
+                    <button class="action-button"
+                            data-edit-risk="${r.id}">Modifier</button>
+                    <button class="action-button danger-button"
+                            data-delete-risk="${r.id}">Supprimer</button>
+                </td>
+                ` : ""}
             </tr>
           `).join("") || `
-            <tr><td colspan="${canWrite ? 9 : 8}">Aucun risque enregistré</td></tr>
+            <tr>
+                <td colspan="${canWrite ? 14 : 13}">
+                    Aucun risque enregistré
+                </td>
+            </tr>
           `}
           </tbody>
         </table>
@@ -703,11 +806,15 @@ function renderRisks() {
 
     function resetRiskForm() {
         form.reset();
+
         $("risk-id").value = "";
         $("risk-form-title").textContent = "Ajouter un risque";
         $("risk-submit").textContent = "Enregistrer le risque";
+
         probability.value = "3";
         impact.value = "3";
+        $("risk-status").value = "ouvert";
+
         updateRiskPreview();
     }
 
@@ -727,30 +834,53 @@ function renderRisks() {
             return;
         }
 
+        const threat = $("risk-threat").value.trim();
+        const vulnerability = $("risk-vulnerability").value.trim();
+
+        if (threat.length < 3 || vulnerability.length < 3) {
+            showMessage("La menace et la vulnérabilité doivent contenir au moins 3 caractères.");
+            return;
+        }
+
+        const optionalValue = fieldId =>
+            $(fieldId).value.trim() || null;
+
         const data = {
-            process_id: Number(processId),
             asset_id: $("risk-asset").value
                 ? Number($("risk-asset").value) : null,
-            threat: $("risk-threat").value.trim(),
-            vulnerability: $("risk-vulnerability").value.trim(),
+
+            code: optionalValue("risk-code"),
+            name: optionalValue("risk-name"),
+            category: optionalValue("risk-category"),
+
+            threat,
+            vulnerability,
+
+            causes: optionalValue("risk-causes"),
+            consequence: optionalValue("risk-consequence"),
+            source: optionalValue("risk-source"),
+
+            existing_measures: optionalValue("risk-existing-measures"),
+            owner: optionalValue("risk-owner"),
+            review_date: $("risk-review-date").value || null,
+            status: $("risk-status").value,
+
             probability: Number(probability.value),
             impact: Number(impact.value)
         };
 
         try {
             if (id) {
-                await API.updateRisk(Number(id), {
-                    asset_id: data.asset_id,
-                    threat: data.threat,
-                    vulnerability: data.vulnerability,
-                    probability: data.probability,
-                    impact: data.impact
-                });
+                await API.updateRisk(Number(id), data);
             } else {
-                await API.createRisk(data);
+                await API.createRisk({
+                    ...data,
+                    process_id: Number(processId)
+                });
             }
 
             await loadDashboard();
+
             showMessage(
                 id ? "Risque modifié avec succès." : "Risque ajouté avec succès.",
                 "success"
@@ -768,20 +898,39 @@ function renderRisks() {
             const risk = appData.risks.find(
                 r => r.id === Number(editButton.dataset.editRisk)
             );
+
             if (!risk) return;
 
             $("risk-id").value = risk.id;
             $("risk-process").value = String(risk.process_id);
+
             $("risk-asset").value = risk.asset_id
                 ? String(risk.asset_id) : "";
-            $("risk-threat").value = risk.threat;
-            $("risk-vulnerability").value = risk.vulnerability;
+
+            $("risk-code").value = risk.code || "";
+            $("risk-name").value = risk.name || "";
+            $("risk-category").value = risk.category || "";
+
+            $("risk-threat").value = risk.threat || "";
+            $("risk-vulnerability").value = risk.vulnerability || "";
+
+            $("risk-causes").value = risk.causes || "";
+            $("risk-consequence").value = risk.consequence || "";
+            $("risk-source").value = risk.source || "";
+
+            $("risk-existing-measures").value = risk.existing_measures || "";
+            $("risk-owner").value = risk.owner || "";
+            $("risk-review-date").value = risk.review_date || "";
+            $("risk-status").value = risk.status || "ouvert";
+
             probability.value = String(risk.probability);
             impact.value = String(risk.impact);
 
             $("risk-form-title").textContent = "Modifier le risque";
             $("risk-submit").textContent = "Enregistrer les modifications";
+
             updateRiskPreview();
+
             form.scrollIntoView({ behavior: "smooth" });
             return;
         }
@@ -789,13 +938,17 @@ function renderRisks() {
         if (deleteButton) {
             const id = Number(deleteButton.dataset.deleteRisk);
             const risk = appData.risks.find(r => r.id === id);
+
             if (!risk) return;
 
-            if (!confirm(`Supprimer le risque "${risk.threat}" ?`)) return;
+            if (!confirm(`Supprimer le risque "${risk.name || risk.threat}" ?`)) {
+                return;
+            }
 
             try {
                 await API.deleteRisk(id);
                 await loadDashboard();
+
                 showMessage("Risque supprimé avec succès.", "success");
             } catch (error) {
                 showMessage("Erreur : " + error.message);
@@ -805,6 +958,7 @@ function renderRisks() {
 
     updateRiskPreview();
 }
+
 async function renderMatrix() {
     const data = await API.matrix();
     const cells = data.cells || [];
@@ -1254,6 +1408,7 @@ async function navigate(section) {
         if (section === "treatments") await renderTreatments();
         if (section === "bia") await renderBIA();
         if (section === "audit") await renderAudit();
+        if (section === "governance") await renderGovernance();
     } catch (error) {
         showMessage("Erreur : " + error.message);
     }

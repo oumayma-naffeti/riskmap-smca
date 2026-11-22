@@ -201,6 +201,30 @@ const API = {
         return this.request(`/api/audit-logs?limit=${limit}`);
     },
 
+    governance() {
+        return this.request("/api/governance/program");
+    },
+
+    saveGovernance(data) {
+        return this.request("/api/governance/program", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data)
+        });
+    },
+
+    submitGovernance() {
+        return this.request("/api/governance/program/submit", { method: "POST" });
+    },
+
+    approveGovernance() {
+        return this.request("/api/governance/program/approve", { method: "POST" });
+    },
+
+    rejectGovernance() {
+        return this.request("/api/governance/program/reject", { method: "POST" });
+    },
+
     async downloadReport() {
         const token = this.getToken();
 

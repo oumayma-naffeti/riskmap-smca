@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
@@ -38,6 +38,7 @@ class Token(BaseModel):
 
 
 # ---------- Actifs ----------
+
 class AssetCreate(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     asset_type: AssetType
@@ -59,6 +60,7 @@ class AssetOut(BaseModel):
 
 
 # ---------- Processus (BIA) ----------
+
 class ProcessCreate(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     description: str | None = None
@@ -92,33 +94,98 @@ class ProcessOut(BaseModel):
 
 
 # ---------- Risques ----------
+
+RiskStatus = Literal[
+    "brouillon",
+    "ouvert",
+    "en traitement",
+    "clôturé",
+]
+
+
 class RiskCreate(BaseModel):
     process_id: int
     asset_id: int | None = None
+
+    # Identification
+    code: str | None = Field(default=None, max_length=20)
+    name: str | None = Field(default=None, max_length=200)
+    category: str | None = Field(default=None, max_length=50)
+
+    # Description
     threat: str = Field(min_length=3, max_length=200)
     vulnerability: str = Field(min_length=3, max_length=200)
+    causes: str | None = None
+    consequence: str | None = None
+    source: str | None = Field(default=None, max_length=100)
+
+    # Evaluation
     probability: Scale5
     impact: Scale5
+
+    # Gestion
+    existing_measures: str | None = None
+    owner: str | None = Field(default=None, max_length=80)
+    review_date: date | None = None
+    status: RiskStatus = "ouvert"
 
 
 class RiskUpdate(BaseModel):
     asset_id: int | None = None
+
+    # Identification
+    code: str | None = Field(default=None, max_length=20)
+    name: str | None = Field(default=None, max_length=200)
+    category: str | None = Field(default=None, max_length=50)
+
+    # Description
     threat: str | None = Field(default=None, min_length=3, max_length=200)
     vulnerability: str | None = Field(default=None, min_length=3, max_length=200)
+    causes: str | None = None
+    consequence: str | None = None
+    source: str | None = Field(default=None, max_length=100)
+
+    # Evaluation
     probability: Scale5 | None = None
     impact: Scale5 | None = None
+
+    # Gestion
+    existing_measures: str | None = None
+    owner: str | None = Field(default=None, max_length=80)
+    review_date: date | None = None
+    status: RiskStatus | None = None
 
 
 class RiskOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
+
     id: int
     process_id: int
     asset_id: int | None
+
+    # Identification
+    code: str | None
+    name: str | None
+    category: str | None
+
+    # Description
     threat: str
     vulnerability: str
+    causes: str | None
+    consequence: str | None
+    source: str | None
+
+    # Evaluation
     probability: int
     impact: int
     score: int
+
+    # Gestion
+    existing_measures: str | None
+    owner: str | None
+    review_date: date | None
+    status: str
+
     created_at: datetime
 
     @computed_field
@@ -126,8 +193,8 @@ class RiskOut(BaseModel):
     def level(self) -> str:
         return risk_level(self.score)
 
+
 # ---------- Traitement des risques ----------
-from datetime import date
 
 TreatmentStrategy = Literal["réduire", "accepter", "transférer", "éviter"]
 TreatmentStatus = Literal["à faire", "en cours", "terminé"]
@@ -168,6 +235,7 @@ class TreatmentOut(BaseModel):
 
 
 # ---------- Analyse d'impact sur l'activité (BIA) ----------
+
 class BIACreate(BaseModel):
     process_id: int
     financial_impact: Scale5
@@ -201,8 +269,11 @@ class BIAOut(BaseModel):
     business_consequences: str
     essential_resources: str | None
     created_at: datetime
+
+
 class AuditLogOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
+
     id: int
     username: str
     action: str
