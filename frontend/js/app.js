@@ -1391,6 +1391,52 @@ async function renderTreatments() {
     updateResidualPreview();
 }
 
+async function renderAlerts() {
+    const box = $("alerts-list");
+    if (!box) return;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const isLate = value => value && new Date(value + "T00:00:00") < today;
+
+    try {
+        const risks = appData.risks;
+
+        const lateReviews = risks.filter(r =>
+            isLate(r.review_date) && !RISK_CLOSED_STATUSES.includes(r.status)
+        ).length;
+
+        const controls = await API.controls();
+        const lateControls = controls.filter(c => isLate(c.next_test_date)).length;
+
+        const treatmentLists = await Promise.all(
+            risks.map(r => API.treatments(r.id).catch(() => []))
+        );
+        const lateTreatments = treatmentLists.flat().filter(t =>
+            isLate(t.due_date) && t.status !== "terminé"
+        ).length;
+
+        const rows = [
+            ["risks", "Revues de risque en retard", lateReviews],
+            ["controls", "Tests de contrôle en retard", lateControls],
+            ["treatments", "Traitements en retard", lateTreatments]
+        ];
+
+        box.innerHTML = rows.map(([section, label, count]) => `
+            <div class="distribution-row" style="cursor:pointer" data-alert-section="${section}">
+                <span>${count > 0 ? "⚠" : "✓"} ${escapeHTML(label)}</span>
+                <strong style="color:${count > 0 ? "#b91c1c" : "inherit"}">${count}</strong>
+            </div>
+        `).join("");
+
+        box.querySelectorAll("[data-alert-section]").forEach(row => {
+            row.addEventListener("click", () => navigate(row.dataset.alertSection));
+        });
+    } catch (error) {
+        box.innerHTML = `<p style="padding:12px">Alertes indisponibles : ${escapeHTML(error.message)}</p>`;
+    }
+}
+
 async function loadDashboard() {
     hideMessage();
 
@@ -1411,6 +1457,7 @@ async function loadDashboard() {
         renderProcesses();
         renderAssets();
         renderRisks();
+        renderAlerts();
     } catch (error) {
         showMessage("Erreur de chargement : " + error.message);
     }
