@@ -253,6 +253,10 @@ const API = {
         });
     },
 
+    kriMeasures(id) {
+        return this.request(`/api/kris/${id}/measures`);
+    },
+
     addKRIMeasure(id, data) {
         return this.request(`/api/kris/${id}/measures`, {
             method: "POST",

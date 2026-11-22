@@ -1666,6 +1666,71 @@ async function renderControls() {
     });
 }
 
+function kriHistoryHTML(k, measures) {
+    const breached = v => k.alert_when === "au-dessus" ? v > k.threshold : v < k.threshold;
+    const unit = k.unit ? " " + k.unit : "";
+    const num = v => Number(Number(v).toFixed(2));
+    const fmtDate = d => new Date(d + "T00:00:00").toLocaleDateString("fr-FR");
+    const title = `<strong>Historique : ${escapeHTML(k.name)}</strong>`;
+    const closeBtn = '<button type="button" class="action-button" id="kri-history-close">Fermer</button>';
+
+    if (!measures.length) {
+        return `<div style="margin-bottom:16px">${title}<p>Aucune mesure enregistrée.</p>${closeBtn}</div>`;
+    }
+
+    const W = 640, H = 220, L = 50, R = 20, T = 20, B = 40;
+    const values = measures.map(m => m.value).concat(k.threshold);
+    let min = Math.min(...values), max = Math.max(...values);
+    if (min === max) { min -= 1; max += 1; }
+    const margin = (max - min) * 0.1;
+    min -= margin; max += margin;
+
+    const x = i => measures.length === 1 ? L + (W - L - R) / 2 : L + i * (W - L - R) / (measures.length - 1);
+    const y = v => T + (max - v) * (H - T - B) / (max - min);
+
+    const line = measures.map((m, i) => `${x(i).toFixed(1)},${y(m.value).toFixed(1)}`).join(" ");
+    const dots = measures.map((m, i) => `
+        <circle cx="${x(i).toFixed(1)}" cy="${y(m.value).toFixed(1)}" r="5"
+                fill="${breached(m.value) ? "#b91c1c" : "#15803d"}">
+            <title>${fmtDate(m.measured_at)} : ${num(m.value)}${escapeHTML(unit)}</title>
+        </circle>`).join("");
+    const ty = y(k.threshold).toFixed(1);
+
+    const svg = `
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto" role="img"
+         aria-label="Tendance du KRI ${escapeHTML(k.name)}">
+        <line x1="${L}" y1="${T}" x2="${L}" y2="${H - B}" stroke="#94a3b8"/>
+        <line x1="${L}" y1="${H - B}" x2="${W - R}" y2="${H - B}" stroke="#94a3b8"/>
+        <line x1="${L}" y1="${ty}" x2="${W - R}" y2="${ty}" stroke="#b91c1c" stroke-dasharray="6 4"/>
+        <text x="${W - R}" y="${Number(ty) - 5}" text-anchor="end" font-size="11" fill="#b91c1c">seuil ${num(k.threshold)}${escapeHTML(unit)}</text>
+        <text x="${L - 6}" y="${T + 4}" text-anchor="end" font-size="11" fill="currentColor">${num(max)}</text>
+        <text x="${L - 6}" y="${H - B}" text-anchor="end" font-size="11" fill="currentColor">${num(min)}</text>
+        <text x="${L}" y="${H - B + 18}" font-size="11" fill="currentColor">${fmtDate(measures[0].measured_at)}</text>
+        <text x="${W - R}" y="${H - B + 18}" text-anchor="end" font-size="11" fill="currentColor">${fmtDate(measures[measures.length - 1].measured_at)}</text>
+        <polyline points="${line}" fill="none" stroke="#2563eb" stroke-width="2"/>
+        ${dots}
+    </svg>`;
+
+    const rows = measures.slice().reverse().map(m => `
+        <tr>
+            <td>${fmtDate(m.measured_at)}</td>
+            <td style="color:${breached(m.value) ? "#b91c1c" : "#15803d"};font-weight:600">${num(m.value)}${escapeHTML(unit)}</td>
+            <td>${escapeHTML(m.comment || "—")}</td>
+        </tr>`).join("");
+
+    return `
+    <div style="margin-bottom:20px">
+        ${title}
+        <p>Alerte si la valeur est ${escapeHTML(k.alert_when)} ${num(k.threshold)}${escapeHTML(unit)}. Points rouges : seuil dépassé.</p>
+        ${svg}
+        <table>
+            <thead><tr><th>Date</th><th>Valeur</th><th>Commentaire</th></tr></thead>
+            <tbody>${rows}</tbody>
+        </table>
+        <p>${closeBtn}</p>
+    </div>`;
+}
+
 async function renderKRIs() {
     const canWrite = ["admin", "analyste"].includes(currentUser?.role);
     const canDelete = currentUser?.role === "admin";
@@ -1765,6 +1830,7 @@ async function renderKRIs() {
 
     <div class="process-form-card">
         <h3>Registre des KRI</h3>
+        <div id="kri-history"></div>
         <table>
             <thead>
                 <tr>
@@ -1791,6 +1857,7 @@ async function renderKRIs() {
                     ${canWrite ? `
                     <td class="process-actions">
                         <button class="action-button" data-measure-kri="${k.id}">Mesure</button>
+                        <button class="action-button" data-history-kri="${k.id}">Historique</button>
                         <button class="action-button" data-edit-kri="${k.id}">Modifier</button>
                         ${canDelete ? `<button class="action-button danger-button" data-delete-kri="${k.id}">Supprimer</button>` : ""}
                     </td>` : ""}
@@ -1896,6 +1963,22 @@ async function renderKRIs() {
         } catch (error) {
             showMessage(error.message);
         }
+    });
+
+    box.querySelectorAll("[data-history-kri]").forEach(button => {
+        button.addEventListener("click", async () => {
+            const k = kris.find(x => x.id === Number(button.dataset.historyKri));
+            if (!k) return;
+            const holder = $("kri-history");
+            try {
+                const measures = (await API.kriMeasures(k.id)).slice().reverse();
+                holder.innerHTML = kriHistoryHTML(k, measures);
+                $("kri-history-close").onclick = () => { holder.innerHTML = ""; };
+                holder.scrollIntoView({ behavior: "smooth" });
+            } catch (error) {
+                showMessage(error.message);
+            }
+        });
     });
 
     box.querySelectorAll("[data-delete-kri]").forEach(button => {
